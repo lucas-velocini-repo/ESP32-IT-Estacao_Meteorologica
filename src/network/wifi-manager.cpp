@@ -17,12 +17,22 @@ void WiFiManager::connect()
     WiFi.mode(WIFI_STA);
     WiFi.begin(_ssid, _password);
 
-    while (WiFi.status() != WL_CONNECTED)
+    unsigned long start = millis();
+
+    while (WiFi.status() != WL_CONNECTED &&
+        millis() - start < 10000)
     {
         delay(500);
         Serial.print(".");
     }
 
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println();
+        Serial.println("Falha ao conectar ao WiFi.");
+        return;
+    }
+    
     Serial.println();
     Serial.println("WiFi conectado!");
 
@@ -63,7 +73,7 @@ bool WiFiManager::configure(
 
     while(
         WiFi.status() != WL_CONNECTED &&
-        millis() - start < 15000
+        millis() - start < 10000
     )
     {
         delay(500);
