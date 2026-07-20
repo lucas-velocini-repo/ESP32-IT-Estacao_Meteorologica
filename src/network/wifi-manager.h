@@ -6,8 +6,11 @@ class WiFiManager
 {
 public:
     void begin(const char* ssid, const char* password);
-    bool isConnected();
     bool isConnected() const;
+    bool configure(
+        const char* ssid,
+        const char* password
+    );
     String getSSID() const;
     String getIP() const;
 

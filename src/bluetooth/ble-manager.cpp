@@ -8,6 +8,7 @@ void BLEManager::begin()
     Serial.println("Inicializando BLE...");
 
     NimBLEDevice::init(DEVICE_NAME);
+    NimBLEDevice::setMTU(247);
 
     server = NimBLEDevice::createServer();
     server->setCallbacks(new ServerCallbacks(this));
@@ -84,6 +85,11 @@ void BLEManager::send(const std::string& message)
         return;
 
     tx->setValue(message);
+
+    Serial.print("Tamanho da mensagem: ");
+    Serial.println(message.length());
+
+    Serial.println(message.c_str());
 
     tx->notify();
 }

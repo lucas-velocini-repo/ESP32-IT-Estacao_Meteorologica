@@ -30,7 +30,7 @@ void WiFiManager::connect()
     Serial.println(WiFi.localIP());
 }
 
-bool WiFiManager::isConnected()
+bool WiFiManager::isConnected() const
 {
     return WiFi.status() == WL_CONNECTED;
 }
@@ -43,4 +43,34 @@ String WiFiManager::getSSID() const
 String WiFiManager::getIP() const
 {
     return WiFi.localIP().toString();
+}
+
+bool WiFiManager::configure(
+    const char* ssid,
+    const char* password
+)
+{
+    _ssid = ssid;
+    _password = password;
+
+    WiFi.disconnect(true);
+
+    WiFi.begin(_ssid, _password);
+
+    Serial.println("Conectando...");
+
+    unsigned long start = millis();
+
+    while(
+        WiFi.status() != WL_CONNECTED &&
+        millis() - start < 15000
+    )
+    {
+        delay(500);
+        Serial.print(".");
+    }
+
+    Serial.println();
+
+    return WiFi.status() == WL_CONNECTED;
 }
