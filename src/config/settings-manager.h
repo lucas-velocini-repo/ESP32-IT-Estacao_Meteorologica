@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include "sensors/sensor-data.h"
 
 class SettingsManager
 {
@@ -22,4 +23,21 @@ public:
 
 private:
     Preferences preferences;
+};
+
+class HttpClient
+{
+public:
+
+    void begin(
+        SettingsManager& settings
+    );
+
+    bool send(
+        const SensorData& data
+    );
+
+private:
+
+    SettingsManager* settings = nullptr;
 };

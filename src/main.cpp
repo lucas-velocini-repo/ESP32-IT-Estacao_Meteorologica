@@ -6,18 +6,28 @@
 #include "bluetooth/ble-manager.h"
 #include "config/settings-manager.h"
 #include "protocol/protocol-handler.h"
+#include "sensors/sensor-manager.h"
+#include "api/json-builder.h"
+#include "station/station-data.h"
+#include "network/station-http-client.h"
 
 WiFiManager wifi;
 BLEManager ble;
 SettingsManager settings;
 ProtocolHandler protocol;
+SensorManager sensors;
+StationHttpClient stationHttp;
+unsigned long lastDataTime = 0;
 void processPendingWifiConfiguration();
+void sendStationData();
 
 void setup()
 {
     Serial.begin(19200);
     settings.begin();
-    protocol.begin (ble, wifi,settings);
+    sensors.begin();
+    stationHttp.begin(settings);
+    protocol.begin (ble, wifi, settings);
 
     String ssid = settings.getSSID();
 
@@ -43,6 +53,13 @@ void loop()
     ble.update();
 
     processPendingWifiConfiguration();
+
+    unsigned long currentTime = millis();
+
+    if(currentTime - lastDataTime >= DATA_SEND_INTERVAL_MS)
+    {
+        lastDataTime = currentTime;
+        sendStationData();    }
 
     delay(10);
 }
@@ -106,5 +123,41 @@ void processPendingWifiConfiguration(){
 
             ble.send(statusJson);
         }
+    }
+}
+
+void sendStationData()
+{
+    SensorData sensorData = sensors.read();
+
+    StationData station;
+
+    station.deviceId = 5;
+    station.deviceName = "estacao s3";
+
+    station.timestamp = millis() / 1000;
+
+    station.latitude = -23.5;
+    station.longitude = -47.2;
+
+    station.sensors = sensorData;
+
+    std::string json =
+        JsonBuilder::buildStationPayload(
+            station
+        );
+
+    Serial.println();
+    Serial.println("Payload da estação:");
+
+    Serial.println(
+        json.c_str()
+    );
+
+    bool success = stationHttp.send(json);
+
+    if(!success)
+    {
+        Serial.println("[Estação] Envio não realizado.");
     }
 }
