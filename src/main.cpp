@@ -10,6 +10,7 @@
 #include "api/json-builder.h"
 #include "station/station-data.h"
 #include "network/station-http-client.h"
+#include "time/time-manager.h"
 
 WiFiManager wifi;
 BLEManager ble;
@@ -17,6 +18,7 @@ SettingsManager settings;
 ProtocolHandler protocol;
 SensorManager sensors;
 StationHttpClient stationHttp;
+TimeManager timeManager;
 unsigned long lastDataTime = 0;
 void processPendingWifiConfiguration();
 void sendStationData();
@@ -37,6 +39,15 @@ void setup()
     {
         wifi.begin(ssid.c_str(), password.c_str());
     }
+
+    timeManager.begin();
+
+    if(wifi.isConnected())
+    {
+        timeManager.waitForSynchronization(
+            10000
+        );
+    }
     
     ble.setMessageCallback(
         [&](const std::string& msg)
@@ -53,6 +64,8 @@ void loop()
     ble.update();
 
     processPendingWifiConfiguration();
+
+    timeManager.update();
 
     unsigned long currentTime = millis();
 
@@ -92,6 +105,9 @@ void processPendingWifiConfiguration(){
         if(connected)
         {
             response["status"] = "ok";
+
+            timeManager.begin();
+            timeManager.waitForSynchronization(10000);
         }
         else
         {
@@ -135,7 +151,13 @@ void sendStationData()
     station.deviceId = 5;
     station.deviceName = "estacao s3";
 
-    station.timestamp = millis() / 1000;
+    station.measuredAt = timeManager.now();
+
+    if(station.measuredAt == 0)
+    {
+        Serial.println("[Time] Horário ainda não sincronizado.");
+        Serial.println("[Time] O servidor usará received_at como fallback.");
+    }
 
     station.latitude = -23.5;
     station.longitude = -47.2;

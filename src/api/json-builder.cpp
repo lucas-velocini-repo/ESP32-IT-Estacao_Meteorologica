@@ -10,7 +10,7 @@ std::string JsonBuilder::buildStationPayload(
 
     doc["device_id"] = station.deviceId;
     doc["device_name"] = station.deviceName;
-    doc["timestamp"] = station.timestamp;
+    doc["measured_at"] = station.measuredAt;
 
     JsonObject location =
         doc["location"].to<JsonObject>();
