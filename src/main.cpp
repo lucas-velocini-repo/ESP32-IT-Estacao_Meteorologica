@@ -148,8 +148,8 @@ void sendStationData()
 
     StationData station;
 
-    station.deviceId = 5;
-    station.deviceName = "estacao s3";
+    station.deviceId = 6;
+    station.deviceName = "estacao maratonista";
 
     station.measuredAt = timeManager.now();
 
