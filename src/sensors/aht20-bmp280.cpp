@@ -1,34 +1,109 @@
 #include "aht20-bmp280.h"
 
 #include <Arduino.h>
+#include <Wire.h>
+#include <math.h>
 
 void AHT20BMP280::begin()
 {
-    randomSeed(micros());
+    Serial.println();
+    Serial.println("[AHT20/BMP280] Inicializando sensores...");
+    
+    // AHT20 -----------------------------
+    ahtReady = aht.begin(&Wire);
 
-    temperature = random(180, 330) / 10.0f;
-    humidity = random(350, 850) / 10.0f;
-    pressure = random(9900, 10350) / 10.0f;
+    if(ahtReady)
+    {
+        Serial.println("[AHT20] Sensor encontrado.");
+    }
+    else
+    {
+        Serial.println("[AHT20] ERRO: sensor não encontrado.");
+    }
+
+    // BMP280 -----------------------------
+    // Primeiro tenta o endereço padrão 0x77.
+    bmpReady = bmp.begin(0x77);
+
+    if(bmpReady)
+    {
+        Serial.println("[BMP280] Sensor encontrado em 0x77.");
+    }
+    else
+    {
+        Serial.println("[BMP280] Não encontrado em 0x77.");
+
+        Serial.println("[BMP280] Tentando endereço 0x76...");
+
+        bmpReady = bmp.begin(0x76);
+
+        if(bmpReady)
+        {
+            Serial.println("[BMP280] Sensor encontrado em 0x76.");
+        }
+        else
+        {
+            Serial.println("[BMP280] ERRO: sensor não encontrado.");
+        }
+    }
+
+    Serial.println("[AHT20/BMP280] Inicialização concluída.");
 }
 
 void AHT20BMP280::update(
     SensorData& data
 )
 {
-    temperature += random(-5, 6) / 10.0f;
-    humidity += random(-10, 11) / 10.0f;
-    pressure += random(-3, 4) / 10.0f;
+    // AHT20 -----------------------------
+    if(ahtReady)
+    {
+        sensors_event_t humidityEvent;
+        sensors_event_t temperatureEvent;
 
-    if (temperature < 18.0f) temperature = 18.0f;
-    if (temperature > 33.0f) temperature = 33.0f;
+        bool success =
+            aht.getEvent(
+                &humidityEvent,
+                &temperatureEvent
+            );
 
-    if (humidity < 35.0f) humidity = 35.0f;
-    if (humidity > 85.0f) humidity = 85.0f;
+        if(success)
+        {
+            if(!isnan(temperatureEvent.temperature))
+            {
+                temperature = temperatureEvent.temperature;
+            }
 
-    if (pressure < 990.0f) pressure = 990.0f;
-    if (pressure > 1035.0f) pressure = 1035.0f;
+            if(!isnan(humidityEvent.relative_humidity))
+            {
+                humidity = humidityEvent.relative_humidity;
+            }
+        }
+        else
+        {
+            Serial.println("[AHT20] Falha durante leitura.");
+        }
+    }
+
+    // BMP280 -----------------------------
+    if(bmpReady)
+    {
+        float pressurePa = bmp.readPressure();
+
+        if(!isnan(pressurePa) && pressurePa > 0.0f)
+        {
+            // BMP280 retorna Pa.
+            // O servidor trabalha com hPa.
+            pressure = pressurePa / 100.0f;
+        }
+        else
+        {
+            Serial.println("[BMP280] Falha durante leitura.");
+        }
+    }
 
     data.temperature = temperature;
+
     data.humidity = humidity;
+
     data.pressure = pressure;
 }
