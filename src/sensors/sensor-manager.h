@@ -10,7 +10,11 @@ class SensorManager
 {
 public:
 
-    void begin();
+    // Os pinos do I2C são definidos pela main e passados aqui.
+    void begin(
+        int sdaPin,
+        int sclPin
+    );
 
     SensorData read();
 
