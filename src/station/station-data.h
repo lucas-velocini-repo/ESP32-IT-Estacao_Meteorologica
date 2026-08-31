@@ -5,9 +5,10 @@
 
 #include "sensors/sensor-data.h"
 
+
 struct StationData
 {
-    int deviceId = 0;
+    String deviceId;
 
     String deviceName;
 
