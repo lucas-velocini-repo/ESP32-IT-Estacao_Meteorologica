@@ -11,6 +11,7 @@
 #include "station/station-data.h"
 #include "network/station-http-client.h"
 #include "time/time-manager.h"
+#include "device/device-identity.h"
 
 WiFiManager wifi;
 BLEManager ble;
@@ -57,6 +58,12 @@ void setup()
     );
     
     ble.begin();
+
+    String hardwareId =
+    DeviceIdentity::getHardwareId();
+
+    Serial.print("[Device] Hardware ID: ");
+    Serial.println(hardwareId);
 }
 
 void loop()
