@@ -16,6 +16,24 @@ void SettingsManager::saveWifi(
     preferences.putString("server", server);
 }
 
+void SettingsManager::saveDeviceId(
+    const String& deviceId
+)
+{
+    preferences.putString(
+        "device_id",
+        deviceId
+    );
+}
+
+String SettingsManager::getDeviceId()
+{
+    return preferences.getString(
+        "device_id",
+        ""
+    );
+}
+
 String SettingsManager::getSSID()
 {
     return preferences.getString("ssid", "");

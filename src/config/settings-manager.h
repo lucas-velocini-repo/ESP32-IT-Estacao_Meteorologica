@@ -17,10 +17,6 @@ public:
 
     void saveDeviceId(const String& deviceId);
 
-    void handleSaveIdentity(
-        const JsonDocument& doc
-    );
-
     String getDeviceId();
 
     String getSSID();

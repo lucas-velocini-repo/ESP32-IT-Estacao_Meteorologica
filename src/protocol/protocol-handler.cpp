@@ -45,15 +45,15 @@ void ProtocolHandler::handle(
         return;
     }
 
-    if(command == "save_identity")
-    {
-        handleSaveIdentity(doc);
-        return;
-    }
-
     if(strcmp(command, "configure_wifi") == 0)
     {
         handleConfigureWifi(doc);
+        return;
+    }
+
+    if(strcmp(command, "save_identity") == 0)
+    {
+        handleSaveIdentity(doc);
         return;
     }
 
@@ -69,6 +69,9 @@ void ProtocolHandler::handleGetStatus()
 
     response["hardwareId"] =
     DeviceIdentity::getHardwareId();
+
+    response["deviceId"] =
+        settings->getDeviceId();
 
     bool wifiConnected = wifi->isConnected();
 
@@ -125,6 +128,51 @@ void ProtocolHandler::handleConfigureWifi(JsonDocument& doc)
     pendingWifiConfig.pending = true;
 }
 
+void ProtocolHandler::handleSaveIdentity(
+    JsonDocument& doc
+)
+{
+    const char* deviceId =
+        doc["deviceId"] | "";
+
+    if(strlen(deviceId) == 0)
+    {
+        ble->send(
+            R"({
+                "type":"identity_saved",
+                "status":"error",
+                "message":"deviceId ausente"
+            })"
+        );
+
+        return;
+    }
+
+    settings->saveDeviceId(
+        String(deviceId)
+    );
+
+    JsonDocument response;
+
+    response["type"] =
+        "identity_saved";
+
+    response["status"] =
+        "ok";
+
+    response["deviceId"] =
+        deviceId;
+
+    std::string json;
+
+    serializeJson(
+        response,
+        json
+    );
+
+    ble->send(json);
+}
+
 bool ProtocolHandler::hasPendingWifiConfiguration() const
 {
     return pendingWifiConfig.pending;
@@ -154,43 +202,4 @@ String SettingsManager::getDeviceId()
         "device_id",
         ""
     );
-}
-
-void ProtocolHandler::handleSaveIdentity(
-    const JsonDocument& doc
-)
-{
-    if(!doc["deviceId"].is<const char*>())
-    {
-        JsonDocument response;
-
-        response["type"] = "error";
-        response["message"] =
-            "deviceId ausente";
-
-        std::string json;
-        serializeJson(response, json);
-
-        ble->send(json);
-
-        return;
-    }
-
-    String deviceId =
-        doc["deviceId"].as<String>();
-
-    settings->saveDeviceId(deviceId);
-
-    JsonDocument response;
-
-    response["type"] =
-        "identity_saved";
-
-    response["deviceId"] =
-        deviceId;
-
-    std::string json;
-    serializeJson(response, json);
-
-    ble->send(json);
 }

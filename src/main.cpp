@@ -152,11 +152,25 @@ void processPendingWifiConfiguration(){
 
 void sendStationData()
 {
-    SensorData sensorData = sensors.read();
+    String deviceId =
+        settings.getDeviceId();
+
+    if(deviceId.length() == 0)
+    {
+        Serial.println(
+            "[Station] Dispositivo ainda não provisionado."
+        );
+
+        return;
+    }
+
+    SensorData sensorData =
+        sensors.read();
 
     StationData station;
 
-    station.deviceId = "CASA-001";
+    station.deviceId = deviceId;
+
     station.deviceName = "Estação Teste";
 
     station.measuredAt = timeManager.now();
