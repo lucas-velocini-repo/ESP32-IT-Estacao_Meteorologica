@@ -1,5 +1,6 @@
 #include "protocol-handler.h"
 #include <ArduinoJson.h>
+#include "device/device-identity.h"
 
 void ProtocolHandler::begin(
     BLEManager& ble,
@@ -44,6 +45,12 @@ void ProtocolHandler::handle(
         return;
     }
 
+    if(command == "save_identity")
+    {
+        handleSaveIdentity(doc);
+        return;
+    }
+
     if(strcmp(command, "configure_wifi") == 0)
     {
         handleConfigureWifi(doc);
@@ -59,6 +66,9 @@ void ProtocolHandler::handleGetStatus()
 
     response["type"] = "status";
     response["bluetooth"] = true;
+
+    response["hardwareId"] =
+    DeviceIdentity::getHardwareId();
 
     bool wifiConnected = wifi->isConnected();
 
@@ -126,4 +136,61 @@ ProtocolHandler::takePendingWifiConfiguration()
     PendingWifiConfig config = pendingWifiConfig;
     pendingWifiConfig.pending = false;
     return config;
+}
+
+void SettingsManager::saveDeviceId(
+    const String& deviceId
+)
+{
+    preferences.putString(
+        "device_id",
+        deviceId
+    );
+}
+
+String SettingsManager::getDeviceId()
+{
+    return preferences.getString(
+        "device_id",
+        ""
+    );
+}
+
+void ProtocolHandler::handleSaveIdentity(
+    const JsonDocument& doc
+)
+{
+    if(!doc["deviceId"].is<const char*>())
+    {
+        JsonDocument response;
+
+        response["type"] = "error";
+        response["message"] =
+            "deviceId ausente";
+
+        std::string json;
+        serializeJson(response, json);
+
+        ble->send(json);
+
+        return;
+    }
+
+    String deviceId =
+        doc["deviceId"].as<String>();
+
+    settings->saveDeviceId(deviceId);
+
+    JsonDocument response;
+
+    response["type"] =
+        "identity_saved";
+
+    response["deviceId"] =
+        deviceId;
+
+    std::string json;
+    serializeJson(response, json);
+
+    ble->send(json);
 }

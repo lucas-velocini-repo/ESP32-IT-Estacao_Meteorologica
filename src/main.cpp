@@ -133,6 +133,7 @@ void processPendingWifiConfiguration(){
             JsonDocument status;
 
             status["type"] = "status";
+            status["hardwareId"] = DeviceIdentity::getHardwareId();
             status["bluetooth"] = true;
             status["wifiConnected"] = true;
             status["ssid"] = wifi.getSSID();

@@ -15,6 +15,14 @@ public:
         const String& server
     );
 
+    void saveDeviceId(const String& deviceId);
+
+    void handleSaveIdentity(
+        const JsonDocument& doc
+    );
+
+    String getDeviceId();
+
     String getSSID();
 
     String getPassword();
