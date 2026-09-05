@@ -185,21 +185,3 @@ ProtocolHandler::takePendingWifiConfiguration()
     pendingWifiConfig.pending = false;
     return config;
 }
-
-void SettingsManager::saveDeviceId(
-    const String& deviceId
-)
-{
-    preferences.putString(
-        "device_id",
-        deviceId
-    );
-}
-
-String SettingsManager::getDeviceId()
-{
-    return preferences.getString(
-        "device_id",
-        ""
-    );
-}
