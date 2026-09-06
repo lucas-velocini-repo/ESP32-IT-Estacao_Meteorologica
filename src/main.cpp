@@ -12,6 +12,7 @@
 #include "network/station-http-client.h"
 #include "time/time-manager.h"
 #include "device/device-identity.h"
+#include "storage/pending-measurement-store.h"
 
 WiFiManager wifi;
 BLEManager ble;
@@ -20,14 +21,21 @@ ProtocolHandler protocol;
 SensorManager sensors;
 StationHttpClient stationHttp;
 TimeManager timeManager;
+PendingMeasurementStore pendingMeasurements;
+
+unsigned long lastPendingRetryTime = 0;
+constexpr unsigned long PENDING_RETRY_INTERVAL_MS = 2000;
 unsigned long lastDataTime = 0;
+
 void processPendingWifiConfiguration();
+void processPendingMeasurements();
 void sendStationData();
 
 void setup()
 {
     Serial.begin(19200);
     settings.begin();
+    pendingMeasurements.begin();
     sensors.begin();
     stationHttp.begin(settings);
     protocol.begin (ble, wifi, settings);
@@ -72,7 +80,11 @@ void loop()
 
     processPendingWifiConfiguration();
 
+    wifi.update();
+
     timeManager.update();
+
+    processPendingMeasurements();
 
     unsigned long currentTime = millis();
 
@@ -152,6 +164,85 @@ void processPendingWifiConfiguration(){
     }
 }
 
+void processPendingMeasurements()
+{
+    if(!wifi.isConnected())
+    {
+        return;
+    }
+
+
+    const unsigned long currentTime =
+        millis();
+
+
+    if(
+        currentTime
+        - lastPendingRetryTime
+        < PENDING_RETRY_INTERVAL_MS
+    )
+    {
+        return;
+    }
+
+
+    lastPendingRetryTime =
+        currentTime;
+
+
+    std::string payload;
+
+
+    if(
+        !pendingMeasurements.peek(
+            payload
+        )
+    )
+    {
+        return;
+    }
+
+
+    Serial.println();
+    Serial.print(
+        "[Queue] Reenviando medição pendente. Restantes: "
+    );
+
+    Serial.println(
+        pendingMeasurements.count()
+    );
+
+
+    const bool success =
+        stationHttp.send(
+            payload
+        );
+
+
+    if(!success)
+    {
+        Serial.println(
+            "[Queue] Reenvio falhou. Medição mantida."
+        );
+
+        return;
+    }
+
+
+    if(
+        pendingMeasurements.removeFirst()
+    )
+    {
+        Serial.print(
+            "[Queue] Medição pendente enviada. Restantes: "
+        );
+
+        Serial.println(
+            pendingMeasurements.count()
+        );
+    }
+}
+
 void sendStationData()
 {
     String deviceId =
@@ -178,6 +269,17 @@ void sendStationData()
         return;
     }
 
+    if(
+        !timeManager.isSynchronized()
+    )
+    {
+        Serial.println(
+            "[Station] Horário ainda não sincronizado. Medição não realizada."
+        );
+
+        return;
+    }
+
     SensorData sensorData =
         sensors.read();
 
@@ -188,12 +290,6 @@ void sendStationData()
     station.deviceName = "Estação Teste";
 
     station.measuredAt = timeManager.now();
-
-    if(station.measuredAt == 0)
-    {
-        Serial.println("[Time] Horário ainda não sincronizado.");
-        Serial.println("[Time] O servidor usará received_at como fallback.");
-    }
 
     station.latitude = -23.5;
     station.longitude = -47.2;
@@ -212,10 +308,28 @@ void sendStationData()
         json.c_str()
     );
 
-    bool success = stationHttp.send(json);
+    bool success =
+        stationHttp.send(
+            json
+        );
+
 
     if(!success)
     {
-        Serial.println("[Estação] Envio não realizado.");
+        Serial.println(
+            "[Station] Envio não realizado. Salvando medição localmente..."
+        );
+
+
+        if(
+            !pendingMeasurements.enqueue(
+                json
+            )
+        )
+        {
+            Serial.println(
+                "[Station] ERRO: não foi possível salvar a medição pendente."
+            );
+        }
     }
 }

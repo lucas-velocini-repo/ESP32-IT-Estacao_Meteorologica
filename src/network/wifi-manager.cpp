@@ -137,3 +137,61 @@ bool WiFiManager::configure(
 
     return true;
 }
+
+void WiFiManager::update()
+{
+    if(WiFi.status() == WL_CONNECTED)
+    {
+        reconnectIntervalMs = 5000;
+        return;
+    }
+
+    if(_ssid.length() == 0)
+    {
+        return;
+    }
+
+    unsigned long now =
+        millis();
+
+    if(
+        now - lastReconnectAttempt
+        < reconnectIntervalMs
+    )
+    {
+        return;
+    }
+
+    lastReconnectAttempt =
+        now;
+
+    Serial.print(
+        "[WiFi] Reconectando à rede: "
+    );
+
+    Serial.println(
+        _ssid
+    );
+
+    WiFi.disconnect();
+
+    delay(50);
+
+    WiFi.mode(WIFI_STA);
+
+    WiFi.begin(
+        _ssid.c_str(),
+        _password.c_str()
+    );
+
+    reconnectIntervalMs *= 2;
+
+    if(
+        reconnectIntervalMs
+        > MAX_RECONNECT_INTERVAL_MS
+    )
+    {
+        reconnectIntervalMs =
+            MAX_RECONNECT_INTERVAL_MS;
+    }
+}
