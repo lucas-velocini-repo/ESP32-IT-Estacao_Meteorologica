@@ -10,7 +10,10 @@ class SensorManager
 {
 public:
 
-    void begin();
+   void begin(
+        int sdaPin,
+        int sclPin
+    );
 
     SensorData read();
 

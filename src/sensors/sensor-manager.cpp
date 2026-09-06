@@ -54,27 +54,34 @@ void scanI2CBus()
     );
 }
 
-namespace
-{
-    constexpr int I2C_SDA_PIN = 5;
-    constexpr int I2C_SCL_PIN = 4;
-}
-
-void SensorManager::begin()
+void SensorManager::begin(
+    int sdaPin,
+    int sclPin
+)
 {
     Serial.println();
     Serial.println("[Sensors] Inicializando barramento I2C...");
 
     Wire.setPins(
-        I2C_SDA_PIN,
-        I2C_SCL_PIN
+        sdaPin,
+        sclPin
     );
 
     Wire.begin();
 
     Wire.setClock(100000);
 
-    Serial.println("[Sensors] I2C iniciado: SDA=GPIO5, SCL=GPIO4");
+    Serial.print(
+        "[Sensors] I2C iniciado: SDA=GPIO"
+    );
+
+    Serial.print(sdaPin);
+
+    Serial.print(
+        ", SCL=GPIO"
+    );
+
+    Serial.println(sclPin);
 
     scanI2CBus();
 

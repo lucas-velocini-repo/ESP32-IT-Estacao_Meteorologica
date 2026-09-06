@@ -13,6 +13,7 @@
 #include "time/time-manager.h"
 #include "device/device-identity.h"
 #include "storage/pending-measurement-store.h"
+#include "sensors/gnss-manager.h"
 
 WiFiManager wifi;
 BLEManager ble;
@@ -22,6 +23,7 @@ SensorManager sensors;
 StationHttpClient stationHttp;
 TimeManager timeManager;
 PendingMeasurementStore pendingMeasurements;
+GNSSManager gnss;
 
 unsigned long lastPendingRetryTime = 0;
 constexpr unsigned long PENDING_RETRY_INTERVAL_MS = 2000;
@@ -36,7 +38,16 @@ void setup()
     Serial.begin(19200);
     settings.begin();
     pendingMeasurements.begin();
-    sensors.begin();
+    sensors.begin(
+        Pins::I2C_SDA,
+        Pins::I2C_SCL
+    );
+    gnss.begin(
+        Serial1,
+        Pins::GNSS_RX,
+        Pins::GNSS_TX,
+        GNSS_BAUD_RATE
+    );
     stationHttp.begin(settings);
     protocol.begin (ble, wifi, settings);
 
@@ -76,6 +87,8 @@ void setup()
 
 void loop()
 {
+    gnss.update();
+
     ble.update();
 
     processPendingWifiConfiguration();
