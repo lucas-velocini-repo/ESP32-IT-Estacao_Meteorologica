@@ -57,6 +57,12 @@ void ProtocolHandler::handle(
         return;
     }
 
+    if(strcmp(command, "save_server") == 0)
+    {
+        handleSaveServer(doc);
+        return;
+    }
+
     ble->send("{\"status\":\"error\",\"message\":\"Comando desconhecido\"}" );
 }
 
@@ -72,6 +78,9 @@ void ProtocolHandler::handleGetStatus()
 
     response["deviceId"] =
         settings->getDeviceId();
+
+    response["apiTokenConfigured"] =
+        settings->getApiToken().length() > 0;
 
     bool wifiConnected = wifi->isConnected();
 
@@ -135,6 +144,9 @@ void ProtocolHandler::handleSaveIdentity(
     const char* deviceId =
         doc["deviceId"] | "";
 
+    const char* apiToken =
+        doc["apiToken"] | "";
+
     if(strlen(deviceId) == 0)
     {
         ble->send(
@@ -148,8 +160,25 @@ void ProtocolHandler::handleSaveIdentity(
         return;
     }
 
+    if(strlen(apiToken) == 0)
+    {
+        ble->send(
+            R"({
+                "type":"identity_saved",
+                "status":"error",
+                "message":"apiToken ausente"
+            })"
+        );
+
+        return;
+    }
+
     settings->saveDeviceId(
         String(deviceId)
+    );
+
+    settings->saveApiToken(
+        String(apiToken)
     );
 
     JsonDocument response;
@@ -162,6 +191,48 @@ void ProtocolHandler::handleSaveIdentity(
 
     response["deviceId"] =
         deviceId;
+
+    std::string json;
+
+    serializeJson(
+        response,
+        json
+    );
+
+    ble->send(json);
+}
+
+void ProtocolHandler::handleSaveServer(
+    JsonDocument& doc
+)
+{
+    const char* server =
+        doc["server"] | "";
+
+    if(strlen(server) == 0)
+    {
+        ble->send(
+            R"({
+                "type":"server_saved",
+                "status":"error",
+                "message":"Rota do servidor ausente"
+            })"
+        );
+
+        return;
+    }
+
+    settings->saveServer(
+        String(server)
+    );
+
+    JsonDocument response;
+
+    response["type"] =
+        "server_saved";
+
+    response["status"] =
+        "ok";
 
     std::string json;
 

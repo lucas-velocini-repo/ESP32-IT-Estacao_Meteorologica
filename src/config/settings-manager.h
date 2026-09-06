@@ -15,9 +15,17 @@ public:
         const String& server
     );
 
+    void saveServer(
+        const String& server
+    );
+
     void saveDeviceId(const String& deviceId);
 
+    void saveApiToken(const String& apiToken);
+
     String getDeviceId();
+
+    String getApiToken();
 
     String getSSID();
 

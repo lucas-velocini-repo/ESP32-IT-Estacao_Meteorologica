@@ -134,6 +134,8 @@ void processPendingWifiConfiguration(){
 
             status["type"] = "status";
             status["hardwareId"] = DeviceIdentity::getHardwareId();
+            status["deviceId"] = settings.getDeviceId();
+            status["apiTokenConfigured"] = settings.getApiToken().length() > 0;
             status["bluetooth"] = true;
             status["wifiConnected"] = true;
             status["ssid"] = wifi.getSSID();
@@ -158,7 +160,19 @@ void sendStationData()
     if(deviceId.length() == 0)
     {
         Serial.println(
-            "[Station] Dispositivo ainda não provisionado."
+            "[Station] Device ID não configurado."
+        );
+
+        return;
+    }
+
+    String apiToken =
+        settings.getApiToken();
+
+    if(apiToken.length() == 0)
+    {
+        Serial.println(
+            "[Station] Token de autenticação não configurado."
         );
 
         return;

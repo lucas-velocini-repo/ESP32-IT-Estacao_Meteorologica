@@ -67,6 +67,30 @@ bool StationHttpClient::send(
         "application/json"
     );
 
+    String apiToken =
+        settings->getApiToken();
+
+    apiToken.trim();
+
+    if(apiToken.length() == 0)
+    {
+        Serial.println(
+            "[HTTP] Token de autenticação não configurado."
+        );
+
+        http.end();
+
+        return false;
+    }
+
+    String authorization =
+        "Bearer " + apiToken;
+
+    http.addHeader(
+        "Authorization",
+        authorization
+    );
+
     String requestBody(payload.c_str());
 
     int httpCode = http.POST(requestBody);

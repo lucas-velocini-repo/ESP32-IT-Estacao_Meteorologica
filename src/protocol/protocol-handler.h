@@ -25,6 +25,10 @@ private:
         JsonDocument& doc
     );
 
+    void handleSaveServer(
+        JsonDocument& doc
+    );
+
     struct PendingWifiConfig
     {
         bool pending = false;

@@ -16,6 +16,6 @@ public:
 
 private:
     void connect();
-    const char* _ssid;
-    const char* _password;
+    String _ssid;
+    String _password;
 };
