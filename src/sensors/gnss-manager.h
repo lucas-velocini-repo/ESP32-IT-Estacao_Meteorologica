@@ -18,6 +18,8 @@ struct GNSSData
     float hdop = 0.0f;
 
     unsigned long lastFixAgeMs = 0;
+    uint32_t sequence = 0;
+    int64_t acquiredAt = 0;
 };
 
 
@@ -45,6 +47,8 @@ private:
         nullptr;
 
     TinyGPSPlus gps;
+    uint32_t fixSequence = 0;
+    int64_t fixEpoch = 0;
 
     bool fixValid =
         false;

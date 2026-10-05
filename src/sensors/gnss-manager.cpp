@@ -1,6 +1,7 @@
 #include "gnss-manager.h"
 
 #include "config/config.h"
+#include "time/utc-epoch.h"
 
 
 void GNSSManager::begin(
@@ -83,6 +84,15 @@ void GNSSManager::update()
 
         lastFixMillis =
             millis();
+
+        ++fixSequence;
+        fixEpoch = 0;
+        if (gps.date.isValid() && gps.time.isValid()
+            && gps.date.age() <= 2000 && gps.time.age() <= 2000)
+        {
+            fixEpoch = gpsUtcEpoch(gps.date.year(), gps.date.month(), gps.date.day(),
+                gps.time.hour(), gps.time.minute(), gps.time.second());
+        }
 
 
         if(
@@ -195,6 +205,8 @@ bool GNSSManager::hasFix() const
 GNSSData GNSSManager::getData() const
 {
     GNSSData data;
+    data.sequence = fixSequence;
+    data.acquiredAt = fixEpoch;
 
     data.valid =
         hasFix();
