@@ -69,7 +69,7 @@ Também são obtidas concentrações numéricas para diferentes faixas de tamanh
 
 ### GNSS/GPS
 
-O firmware possui estrutura inicial para utilização de um módulo GNSS/GPS através de UART.
+O firmware utiliza um NEO-6M por UART com TinyGPSPlus, Serial1 a 9600 baud. O TX do GPS conecta ao GPIO 18 (RX do ESP32); o RX do GPS conecta ao GPIO 17 (TX do ESP32).
 
 A implementação foi projetada para ser **opcional**: uma estação sem módulo GPS conectado deve continuar funcionando normalmente.
 
@@ -82,7 +82,36 @@ O `GNSSManager` realiza a leitura de forma não bloqueante. A ausência de um fi
 * armazenamento local;
 * envio das medições.
 
-A integração física do módulo e o envio periódico da localização ao servidor ainda serão validados.
+A leitura do GPS continua no loop. O `LocationManager` aceita uma posição nova
+na inicialização e a cada 24 horas após a última obtenção bem-sucedida. Cada busca
+dura até cinco minutos; se falhar, uma nova busca começa 15 minutos após o fim
+da tentativa. O relógio monotônico de 64 bits evita mudanças de agenda por NTP
+ou pelo estouro de `millis()`. O módulo permanece alimentado.
+
+A posição aceita precisa ter sido recebida após o começo da busca e ter no máximo
+cinco segundos de idade. Seu horário vem do GPS em UTC; se indisponível, usa o relógio
+sincronizado por NTP descontando a idade da leitura. Sem horário válido, a busca
+continua. Isso permite obter e persistir posição na inicialização sem internet
+quando o GPS já fornece data e hora válidas.
+
+A última posição, seu horário e o envio pendente ficam em um único registro NVS.
+São preservados após reinicialização, e uma nova busca sempre é iniciada ao ligar.
+Sem posição, medições enviam latitude/longitude como `null`; com posição anterior,
+elas continuam enviando a última conhecida. Perder o sinal não apaga essa posição.
+Uma troca de `device_id` descarta a localização de outro cadastro.
+
+O envio usa `PATCH /api/devices/location` e o token já provisionado. A URL é derivada
+da URL existente de medições, que deve terminar em `/measurements` (barra final
+opcional). Não é necessário mudar o protocolo BLE. Tentativas HTTP de localização
+ocorrem no máximo uma vez por minuto enquanto há conexão. Falhas preservam o registro
+pendente; uma nova posição substitui a anterior pendente. O registro só é confirmado
+após HTTP 2xx. Se houver falha de armazenamento, o firmware tenta novamente antes
+de enviar. Essa persistência é independente da fila ambiental em LittleFS.
+
+O backend deve ser atualizado antes do firmware. A recepção física do NEO-6M,
+a qualidade do sinal e os testes de desligamento/religamento precisam ser validados
+na estação real. Os envios HTTP continuam síncronos; as requisições de localização têm timeouts
+de conexão e leitura de três segundos; a janela de busca do GPS não contém espera bloqueante.
 
 ---
 
@@ -527,7 +556,7 @@ O suporte GNSS está em desenvolvimento e ainda requer validação com o módulo
 Entre as funcionalidades previstas estão:
 
 * validar o módulo GNSS/GPS fisicamente;
-* atualizar periodicamente a localização da estação no servidor;
+* validar a atualização diária e a recuperação da localização em testes de campo;
 * implementar sinalização através dos LEDs;
 * padronizar a pinagem entre as unidades;
 * migrar a comunicação para a infraestrutura definitiva em nuvem;
@@ -585,3 +614,35 @@ O firmware encontra-se em fase de preparação para a **validação inicial com 
 As funções essenciais de aquisição, configuração, comunicação, autenticação, reconexão e persistência offline já estão implementadas.
 
 As funcionalidades relacionadas ao GPS, sinalização por LEDs e demais melhorias de hardware serão incorporadas progressivamente durante as próximas etapas de desenvolvimento.
+
+
+## Testes da agenda de localização
+
+Sem placa, com um compilador C++:
+
+```bash
+g++ -std=c++11 -Wall -Wextra -Werror test/location_schedule_test.cpp -o /tmp/location-tests
+/tmp/location-tests
+```
+
+Cobrem a busca inicial, rejeição de posição antiga, 24 horas, timeout, retentativa,
+reinicialização da agenda, uptime além de 32 bits e conversão da data GPS para UTC.
+A compilação completa é feita com `pio run`.
+
+
+O teste de integração no host executa o `LocationManager` real com ArduinoJson
+real e adaptadores de NVS, GPS, relógio e rede em `test/host`. Após instalar as
+bibliotecas com `pio pkg install`, executar:
+
+```bash
+g++ -std=c++11 -Wall -Wextra -Werror \
+  -Itest/host -Isrc -I.pio/libdeps/esp32-s3-devkitm-1/ArduinoJson/src \
+  test/location_manager_test.cpp src/location/location-manager.cpp \
+  -o /tmp/location-manager-tests
+/tmp/location-manager-tests
+```
+
+Cobre obtenção sem NTP, recuperação após reinicialização, precisão das coordenadas,
+retentativa de envio com horário original, confirmação de persistência, atualização
+diária, descarte de posição de outro cadastro e falha de gravação antes do envio.
+Esses adaptadores não são incluídos no firmware e não substituem os testes na placa.

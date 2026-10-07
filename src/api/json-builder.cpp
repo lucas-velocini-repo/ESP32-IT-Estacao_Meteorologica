@@ -12,8 +12,16 @@ std::string JsonBuilder::buildStationPayload(
 
     doc["timestamp"] = station.measuredAt;
 
-    doc["latitude"] = station.latitude;
-    doc["longitude"] = station.longitude;
+    if (station.locationValid)
+    {
+        doc["latitude"] = station.latitude;
+        doc["longitude"] = station.longitude;
+    }
+    else
+    {
+        doc["latitude"] = nullptr;
+        doc["longitude"] = nullptr;
+    }
 
     JsonObject pm =
         doc["pm"].to<JsonObject>();

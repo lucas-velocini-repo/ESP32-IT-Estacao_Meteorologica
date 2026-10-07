@@ -14,6 +14,7 @@
 #include "device/device-identity.h"
 #include "storage/pending-measurement-store.h"
 #include "sensors/gnss-manager.h"
+#include "location/location-manager.h"
 
 WiFiManager wifi;
 BLEManager ble;
@@ -24,6 +25,7 @@ StationHttpClient stationHttp;
 TimeManager timeManager;
 PendingMeasurementStore pendingMeasurements;
 GNSSManager gnss;
+LocationManager stationLocation;
 
 unsigned long lastPendingRetryTime = 0;
 constexpr unsigned long PENDING_RETRY_INTERVAL_MS = 2000;
@@ -37,6 +39,7 @@ void setup()
 {
     Serial.begin(19200);
     settings.begin();
+    stationLocation.begin();
     pendingMeasurements.begin();
     sensors.begin(
         Pins::I2C_SDA,
@@ -96,6 +99,8 @@ void loop()
     wifi.update();
 
     timeManager.update();
+
+    stationLocation.update(gnss, timeManager, settings, stationHttp);
 
     processPendingMeasurements();
 
@@ -304,8 +309,10 @@ void sendStationData()
 
     station.measuredAt = timeManager.now();
 
-    station.latitude = -23.5;
-    station.longitude = -47.2;
+    const StationLocation& location = stationLocation.getData();
+    station.locationValid = location.valid;
+    station.latitude = location.latitude;
+    station.longitude = location.longitude;
 
     station.sensors = sensorData;
 

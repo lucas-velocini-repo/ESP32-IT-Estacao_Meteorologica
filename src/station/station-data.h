@@ -16,6 +16,7 @@ struct StationData
 
     double latitude = 0.0;
     double longitude = 0.0;
+    bool locationValid = false;
 
     SensorData sensors;
 };
