@@ -16,6 +16,52 @@ void SettingsManager::saveWifi(
     preferences.putString("server", server);
 }
 
+void SettingsManager::saveServer(
+    const String& server
+)
+{
+    preferences.putString(
+        "server",
+        server
+    );
+}
+
+void SettingsManager::saveDeviceId(
+    const String& deviceId
+)
+{
+    preferences.putString(
+        "device_id",
+        deviceId
+    );
+}
+
+void SettingsManager::saveApiToken(
+    const String& apiToken
+)
+{
+    preferences.putString(
+        "api_token",
+        apiToken
+    );
+}
+
+String SettingsManager::getDeviceId()
+{
+    return preferences.getString(
+        "device_id",
+        ""
+    );
+}
+
+String SettingsManager::getApiToken()
+{
+    return preferences.getString(
+        "api_token",
+        ""
+    );
+}
+
 String SettingsManager::getSSID()
 {
     return preferences.getString("ssid", "");

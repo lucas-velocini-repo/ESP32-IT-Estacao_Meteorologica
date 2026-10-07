@@ -2,6 +2,8 @@
 
 #include "sensor-data.h"
 
+#include <BH1750.h>
+
 class BH1750Sensor
 {
 public:
@@ -12,5 +14,9 @@ public:
     );
 
 private:
-    float light = 350.0f;
+    BH1750 sensor;
+
+    bool sensorReady = false;
+
+    float light = 0.0f;
 };

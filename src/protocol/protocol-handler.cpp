@@ -1,5 +1,6 @@
 #include "protocol-handler.h"
 #include <ArduinoJson.h>
+#include "device/device-identity.h"
 
 void ProtocolHandler::begin(
     BLEManager& ble,
@@ -50,6 +51,18 @@ void ProtocolHandler::handle(
         return;
     }
 
+    if(strcmp(command, "save_identity") == 0)
+    {
+        handleSaveIdentity(doc);
+        return;
+    }
+
+    if(strcmp(command, "save_server") == 0)
+    {
+        handleSaveServer(doc);
+        return;
+    }
+
     ble->send("{\"status\":\"error\",\"message\":\"Comando desconhecido\"}" );
 }
 
@@ -59,6 +72,15 @@ void ProtocolHandler::handleGetStatus()
 
     response["type"] = "status";
     response["bluetooth"] = true;
+
+    response["hardwareId"] =
+    DeviceIdentity::getHardwareId();
+
+    response["deviceId"] =
+        settings->getDeviceId();
+
+    response["apiTokenConfigured"] =
+        settings->getApiToken().length() > 0;
 
     bool wifiConnected = wifi->isConnected();
 
@@ -113,6 +135,113 @@ void ProtocolHandler::handleConfigureWifi(JsonDocument& doc)
     pendingWifiConfig.server = server;
 
     pendingWifiConfig.pending = true;
+}
+
+void ProtocolHandler::handleSaveIdentity(
+    JsonDocument& doc
+)
+{
+    const char* deviceId =
+        doc["deviceId"] | "";
+
+    const char* apiToken =
+        doc["apiToken"] | "";
+
+    if(strlen(deviceId) == 0)
+    {
+        ble->send(
+            R"({
+                "type":"identity_saved",
+                "status":"error",
+                "message":"deviceId ausente"
+            })"
+        );
+
+        return;
+    }
+
+    if(strlen(apiToken) == 0)
+    {
+        ble->send(
+            R"({
+                "type":"identity_saved",
+                "status":"error",
+                "message":"apiToken ausente"
+            })"
+        );
+
+        return;
+    }
+
+    settings->saveDeviceId(
+        String(deviceId)
+    );
+
+    settings->saveApiToken(
+        String(apiToken)
+    );
+
+    JsonDocument response;
+
+    response["type"] =
+        "identity_saved";
+
+    response["status"] =
+        "ok";
+
+    response["deviceId"] =
+        deviceId;
+
+    std::string json;
+
+    serializeJson(
+        response,
+        json
+    );
+
+    ble->send(json);
+}
+
+void ProtocolHandler::handleSaveServer(
+    JsonDocument& doc
+)
+{
+    const char* server =
+        doc["server"] | "";
+
+    if(strlen(server) == 0)
+    {
+        ble->send(
+            R"({
+                "type":"server_saved",
+                "status":"error",
+                "message":"Rota do servidor ausente"
+            })"
+        );
+
+        return;
+    }
+
+    settings->saveServer(
+        String(server)
+    );
+
+    JsonDocument response;
+
+    response["type"] =
+        "server_saved";
+
+    response["status"] =
+        "ok";
+
+    std::string json;
+
+    serializeJson(
+        response,
+        json
+    );
+
+    ble->send(json);
 }
 
 bool ProtocolHandler::hasPendingWifiConfiguration() const

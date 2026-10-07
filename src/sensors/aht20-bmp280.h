@@ -2,6 +2,9 @@
 
 #include "sensor-data.h"
 
+#include <Adafruit_AHTX0.h>
+#include <Adafruit_BMP280.h>
+
 class AHT20BMP280
 {
 public:
@@ -12,7 +15,13 @@ public:
     );
 
 private:
-    float temperature = 25.0f;
-    float humidity = 60.0f;
-    float pressure = 1013.0f;
+    Adafruit_AHTX0 aht;
+    Adafruit_BMP280 bmp;
+
+    bool ahtReady = false;
+    bool bmpReady = false;
+
+    float temperature = 0.0f;
+    float humidity = 0.0f;
+    float pressure = 0.0f;
 };

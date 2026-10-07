@@ -14,6 +14,16 @@ bool StationHttpClient::send(
     const std::string& payload
 )
 {
+    return request(payload, "POST", false);
+}
+
+bool StationHttpClient::sendLocation(const std::string& payload)
+{
+    return request(payload, "PATCH", true);
+}
+
+bool StationHttpClient::request(const std::string& payload, const char* method, bool location)
+{
     if(settings == nullptr)
     {
         Serial.println(
@@ -46,7 +56,24 @@ bool StationHttpClient::send(
         return false;
     }
 
+    if (location)
+    {
+        while (serverUrl.endsWith("/")) serverUrl.remove(serverUrl.length() - 1);
+        if (!serverUrl.endsWith("/measurements"))
+        {
+            Serial.println("[Location] URL deve terminar em /measurements.");
+            return false;
+        }
+        serverUrl.remove(serverUrl.length() - String("/measurements").length());
+        serverUrl += "/devices/location";
+    }
+
     HTTPClient http;
+    if (location)
+    {
+        http.setConnectTimeout(3000);
+        http.setTimeout(3000);
+    }
 
     Serial.println();
     Serial.println("[HTTP] Enviando dados...");
@@ -67,9 +94,33 @@ bool StationHttpClient::send(
         "application/json"
     );
 
+    String apiToken =
+        settings->getApiToken();
+
+    apiToken.trim();
+
+    if(apiToken.length() == 0)
+    {
+        Serial.println(
+            "[HTTP] Token de autenticação não configurado."
+        );
+
+        http.end();
+
+        return false;
+    }
+
+    String authorization =
+        "Bearer " + apiToken;
+
+    http.addHeader(
+        "Authorization",
+        authorization
+    );
+
     String requestBody(payload.c_str());
 
-    int httpCode = http.POST(requestBody);
+    int httpCode = http.sendRequest(method, requestBody);
 
     if(httpCode <= 0)
     {

@@ -15,7 +15,10 @@ void WiFiManager::connect()
     Serial.println("Conectando ao WiFi...");
 
     WiFi.mode(WIFI_STA);
-    WiFi.begin(_ssid, _password);
+    WiFi.begin(
+        _ssid.c_str(),
+        _password.c_str()
+    );
 
     unsigned long start = millis();
 
@@ -63,17 +66,35 @@ bool WiFiManager::configure(
     _ssid = ssid;
     _password = password;
 
-    WiFi.disconnect(true);
+    Serial.println();
+    Serial.println(
+        "[WiFi] Aplicando nova configuração..."
+    );
 
-    WiFi.begin(_ssid, _password);
+    WiFi.disconnect();
 
-    Serial.println("Conectando...");
+    delay(250);
 
-    unsigned long start = millis();
+    WiFi.mode(WIFI_STA);
+
+    WiFi.begin(
+        _ssid.c_str(),
+        _password.c_str()
+    );
+
+    Serial.print(
+        "[WiFi] Conectando"
+    );
+
+    const unsigned long timeoutMs =
+        30000;
+
+    unsigned long start =
+        millis();
 
     while(
         WiFi.status() != WL_CONNECTED &&
-        millis() - start < 10000
+        millis() - start < timeoutMs
     )
     {
         delay(500);
@@ -82,5 +103,95 @@ bool WiFiManager::configure(
 
     Serial.println();
 
-    return WiFi.status() == WL_CONNECTED;
+    if(
+        WiFi.status()
+        != WL_CONNECTED
+    )
+    {
+        Serial.println(
+            "[WiFi] Timeout ao conectar."
+        );
+
+        return false;
+    }
+
+    Serial.println(
+        "[WiFi] Conectado com sucesso."
+    );
+
+    Serial.print(
+        "[WiFi] Rede: "
+    );
+
+    Serial.println(
+        WiFi.SSID()
+    );
+
+    Serial.print(
+        "[WiFi] IP: "
+    );
+
+    Serial.println(
+        WiFi.localIP()
+    );
+
+    return true;
+}
+
+void WiFiManager::update()
+{
+    if(WiFi.status() == WL_CONNECTED)
+    {
+        reconnectIntervalMs = 5000;
+        return;
+    }
+
+    if(_ssid.length() == 0)
+    {
+        return;
+    }
+
+    unsigned long now =
+        millis();
+
+    if(
+        now - lastReconnectAttempt
+        < reconnectIntervalMs
+    )
+    {
+        return;
+    }
+
+    lastReconnectAttempt =
+        now;
+
+    Serial.print(
+        "[WiFi] Reconectando à rede: "
+    );
+
+    Serial.println(
+        _ssid
+    );
+
+    WiFi.disconnect();
+
+    delay(50);
+
+    WiFi.mode(WIFI_STA);
+
+    WiFi.begin(
+        _ssid.c_str(),
+        _password.c_str()
+    );
+
+    reconnectIntervalMs *= 2;
+
+    if(
+        reconnectIntervalMs
+        > MAX_RECONNECT_INTERVAL_MS
+    )
+    {
+        reconnectIntervalMs =
+            MAX_RECONNECT_INTERVAL_MS;
+    }
 }

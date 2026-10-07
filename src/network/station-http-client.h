@@ -15,7 +15,9 @@ public:
     bool send(
         const std::string& payload
     );
+    bool sendLocation(const std::string& payload);
 
 private:
+    bool request(const std::string& payload, const char* method, bool location);
     SettingsManager* settings = nullptr;
 };

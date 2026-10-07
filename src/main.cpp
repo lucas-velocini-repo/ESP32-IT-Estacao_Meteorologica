@@ -11,6 +11,10 @@
 #include "station/station-data.h"
 #include "network/station-http-client.h"
 #include "time/time-manager.h"
+#include "device/device-identity.h"
+#include "storage/pending-measurement-store.h"
+#include "sensors/gnss-manager.h"
+#include "location/location-manager.h"
 
 WiFiManager wifi;
 BLEManager ble;
@@ -19,15 +23,34 @@ ProtocolHandler protocol;
 SensorManager sensors;
 StationHttpClient stationHttp;
 TimeManager timeManager;
+PendingMeasurementStore pendingMeasurements;
+GNSSManager gnss;
+LocationManager stationLocation;
+
+unsigned long lastPendingRetryTime = 0;
+constexpr unsigned long PENDING_RETRY_INTERVAL_MS = 2000;
 unsigned long lastDataTime = 0;
+
 void processPendingWifiConfiguration();
+void processPendingMeasurements();
 void sendStationData();
 
 void setup()
 {
     Serial.begin(19200);
     settings.begin();
-    sensors.begin();
+    stationLocation.begin();
+    pendingMeasurements.begin();
+    sensors.begin(
+        Pins::I2C_SDA,
+        Pins::I2C_SCL
+    );
+    gnss.begin(
+        Serial1,
+        Pins::GNSS_RX,
+        Pins::GNSS_TX,
+        GNSS_BAUD_RATE
+    );
     stationHttp.begin(settings);
     protocol.begin (ble, wifi, settings);
 
@@ -57,15 +80,29 @@ void setup()
     );
     
     ble.begin();
+
+    String hardwareId =
+    DeviceIdentity::getHardwareId();
+
+    Serial.print("[Device] Hardware ID: ");
+    Serial.println(hardwareId);
 }
 
 void loop()
 {
+    gnss.update();
+
     ble.update();
 
     processPendingWifiConfiguration();
 
+    wifi.update();
+
     timeManager.update();
+
+    stationLocation.update(gnss, timeManager, settings, stationHttp);
+
+    processPendingMeasurements();
 
     unsigned long currentTime = millis();
 
@@ -126,6 +163,9 @@ void processPendingWifiConfiguration(){
             JsonDocument status;
 
             status["type"] = "status";
+            status["hardwareId"] = DeviceIdentity::getHardwareId();
+            status["deviceId"] = settings.getDeviceId();
+            status["apiTokenConfigured"] = settings.getApiToken().length() > 0;
             status["bluetooth"] = true;
             status["wifiConnected"] = true;
             status["ssid"] = wifi.getSSID();
@@ -142,25 +182,137 @@ void processPendingWifiConfiguration(){
     }
 }
 
+void processPendingMeasurements()
+{
+    if(!wifi.isConnected())
+    {
+        return;
+    }
+
+
+    const unsigned long currentTime =
+        millis();
+
+
+    if(
+        currentTime
+        - lastPendingRetryTime
+        < PENDING_RETRY_INTERVAL_MS
+    )
+    {
+        return;
+    }
+
+
+    lastPendingRetryTime =
+        currentTime;
+
+
+    std::string payload;
+
+
+    if(
+        !pendingMeasurements.peek(
+            payload
+        )
+    )
+    {
+        return;
+    }
+
+
+    Serial.println();
+    Serial.print(
+        "[Queue] Reenviando medição pendente. Restantes: "
+    );
+
+    Serial.println(
+        pendingMeasurements.count()
+    );
+
+
+    const bool success =
+        stationHttp.send(
+            payload
+        );
+
+
+    if(!success)
+    {
+        Serial.println(
+            "[Queue] Reenvio falhou. Medição mantida."
+        );
+
+        return;
+    }
+
+
+    if(
+        pendingMeasurements.removeFirst()
+    )
+    {
+        Serial.print(
+            "[Queue] Medição pendente enviada. Restantes: "
+        );
+
+        Serial.println(
+            pendingMeasurements.count()
+        );
+    }
+}
+
 void sendStationData()
 {
-    SensorData sensorData = sensors.read();
+    String deviceId =
+        settings.getDeviceId();
+
+    if(deviceId.length() == 0)
+    {
+        Serial.println(
+            "[Station] Device ID não configurado."
+        );
+
+        return;
+    }
+
+    String apiToken =
+        settings.getApiToken();
+
+    if(apiToken.length() == 0)
+    {
+        Serial.println(
+            "[Station] Token de autenticação não configurado."
+        );
+
+        return;
+    }
+
+    if(
+        !timeManager.isSynchronized()
+    )
+    {
+        Serial.println(
+            "[Station] Horário ainda não sincronizado. Medição não realizada."
+        );
+
+        return;
+    }
+
+    SensorData sensorData =
+        sensors.read();
 
     StationData station;
 
-    station.deviceId = 6;
-    station.deviceName = "estacao maratonista";
+    station.deviceId = deviceId;
+
+    station.deviceName = "Estação Teste";
 
     station.measuredAt = timeManager.now();
 
-    if(station.measuredAt == 0)
-    {
-        Serial.println("[Time] Horário ainda não sincronizado.");
-        Serial.println("[Time] O servidor usará received_at como fallback.");
-    }
-
-    station.latitude = -23.5;
-    station.longitude = -47.2;
+    const StationLocation& location = stationLocation.getData();
+    station.locationValid = location.valid;
+    station.latitude = location.latitude;
+    station.longitude = location.longitude;
 
     station.sensors = sensorData;
 
@@ -176,10 +328,28 @@ void sendStationData()
         json.c_str()
     );
 
-    bool success = stationHttp.send(json);
+    bool success =
+        stationHttp.send(
+            json
+        );
+
 
     if(!success)
     {
-        Serial.println("[Estação] Envio não realizado.");
+        Serial.println(
+            "[Station] Envio não realizado. Salvando medição localmente..."
+        );
+
+
+        if(
+            !pendingMeasurements.enqueue(
+                json
+            )
+        )
+        {
+            Serial.println(
+                "[Station] ERRO: não foi possível salvar a medição pendente."
+            );
+        }
     }
 }
