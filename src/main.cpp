@@ -15,6 +15,9 @@
 #include "storage/pending-measurement-store.h"
 #include "sensors/gnss-manager.h"
 #include "location/location-manager.h"
+#include "hardware-test.h"
+
+constexpr bool TEST_MODE = true;
 
 WiFiManager wifi;
 BLEManager ble;
@@ -38,6 +41,13 @@ void sendStationData();
 void setup()
 {
     Serial.begin(19200);
+
+    if (TEST_MODE)
+    {
+        HardwareTest::begin(sensors, gnss);
+        return;
+    }
+
     settings.begin();
     stationLocation.begin();
     pendingMeasurements.begin();
@@ -90,6 +100,13 @@ void setup()
 
 void loop()
 {
+    if (TEST_MODE)
+    {
+        HardwareTest::update(sensors, gnss);
+        delay(1);
+        return;
+    }
+
     gnss.update();
 
     ble.update();

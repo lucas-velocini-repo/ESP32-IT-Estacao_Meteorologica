@@ -48,31 +48,30 @@ void SettingsManager::saveApiToken(
 
 String SettingsManager::getDeviceId()
 {
-    return preferences.getString(
-        "device_id",
-        ""
-    );
+    if (!preferences.isKey("device_id")) return "";
+    return preferences.getString("device_id", "");
 }
 
 String SettingsManager::getApiToken()
 {
-    return preferences.getString(
-        "api_token",
-        ""
-    );
+    if (!preferences.isKey("api_token")) return "";
+    return preferences.getString("api_token", "");
 }
 
 String SettingsManager::getSSID()
 {
+    if (!preferences.isKey("ssid")) return "";
     return preferences.getString("ssid", "");
 }
 
-String SettingsManager::getPassword() 
+String SettingsManager::getPassword()
 {
+    if (!preferences.isKey("pass")) return "";
     return preferences.getString("pass", "");
 }
 
-String SettingsManager::getServer() 
+String SettingsManager::getServer()
 {
+    if (!preferences.isKey("server")) return "";
     return preferences.getString("server", "");
 }
