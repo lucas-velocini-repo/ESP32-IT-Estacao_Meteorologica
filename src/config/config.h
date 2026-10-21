@@ -35,8 +35,8 @@ namespace Pins
     // GPS RX -> ESP GNSS_TX
     // ==================================================
 
-    constexpr uint8_t GNSS_RX = 17;
-    constexpr uint8_t GNSS_TX = 18;
+    constexpr uint8_t GNSS_RX = 18;
+    constexpr uint8_t GNSS_TX = 17;
 
 
     // ==================================================
@@ -57,14 +57,14 @@ namespace Pins
     // Portanto NÃO inicializaremos os LEDs ainda.
     // ==================================================
 
-    constexpr uint8_t LED1_RED = 5;
-    constexpr uint8_t LED1_BLUE = 4;
+    constexpr uint8_t LED1_RED = 4;
+    constexpr uint8_t LED1_BLUE = 5;
 
-    constexpr uint8_t LED2_RED = 12;
-    constexpr uint8_t LED2_BLUE = 11;
+    constexpr uint8_t LED2_RED = 11;
+    constexpr uint8_t LED2_BLUE = 12;
 
-    constexpr uint8_t LED3_RED = 14;
-    constexpr uint8_t LED3_BLUE = 13;
+    constexpr uint8_t LED3_RED = 13;
+    constexpr uint8_t LED3_BLUE = 14;
 }
 
 
