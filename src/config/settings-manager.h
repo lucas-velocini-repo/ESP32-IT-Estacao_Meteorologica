@@ -23,6 +23,10 @@ public:
 
     void saveApiToken(const String& apiToken);
 
+    uint32_t getMeasurementIntervalSeconds();
+    uint32_t getConfigurationRevision();
+    bool saveMeasurementConfiguration(uint32_t seconds, uint32_t revision);
+
     String getDeviceId();
 
     String getApiToken();
@@ -35,6 +39,8 @@ public:
 
 private:
     Preferences preferences;
+    uint32_t measurementIntervalSeconds = 300;
+    uint32_t configurationRevision = 0;
 };
 
 class HttpClient

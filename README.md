@@ -646,3 +646,31 @@ Cobre obtenção sem NTP, recuperação após reinicialização, precisão das c
 retentativa de envio com horário original, confirmação de persistência, atualização
 diária, descarte de posição de outro cadastro e falha de gravação antes do envio.
 Esses adaptadores não são incluídos no firmware e não substituem os testes na placa.
+
+## Intervalo de aquisição pela rede (firmware 1.2.0)
+
+O padrão para uma estação sem configuração persistida é **300 segundos (5 minutos)**.
+O administrador solicita um intervalo entre **30 e 86400 segundos** no site ou no
+aplicativo. A estação inicia uma consulta autenticada a `GET /api/devices/config`
+a cada 60 segundos, persiste intervalo/revisão juntos em NVS e confirma com
+`POST /api/devices/config/report`. Não é necessário abrir portas no roteador da casa.
+Uma falha na confirmação é recuperada na consulta seguinte; sem rede, a estação
+continua com o último intervalo salvo. A fila offline mantém os timestamps originais.
+O painel distingue intervalo solicitado e confirmado. Só se confirma depois de
+salvar em NVS; falha de gravação não aplica o comando.
+
+É necessário atualizar o backend antes deste firmware e gravar esta versão uma vez
+por USB. Não há atualização remota do firmware neste recurso. Não execute erase flash
+nem apague NVS/LittleFS para atualizar: mantenha identidade, Wi-Fi e fila de medições.
+Se a instalação depende de HTTP temporário, use no servidor a versão atualizada de
+`infra/Caddyfile.http-ingestion`, que também permite os dois caminhos de configuração
+com credencial de estação. O transporte HTTP mantém a limitação de não cifrar a conexão.
+
+No scan BLE, o novo anúncio envia `CASA-` mais os seis últimos dígitos do hardware ID
+na resposta de scan, junto ao serviço UART anunciado. O app também exibe o identificador
+Bluetooth para distinguir unidades, incluindo firmware anterior sem nome no anúncio.
+
+Teste em uma estação de bancada: solicite 60 s; aguarde o estado aplicado; compare
+pelo menos três timestamps novos; reinicie a estação e confirme a persistência;
+desligue a rede, solicite 120 s, confira pendente e reconecte; por fim retorne a 300 s.
+A alteração não reescreve medições anteriores e não altera a agenda diária do GPS.

@@ -1,0 +1,25 @@
+name: Firmware build and host tests
+on:
+  pull_request:
+  push:
+    branches: [main, feature/remote-interval]
+permissions:
+  contents: read
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install platformio
+      - run: pio run
+      - name: Host scheduling and persistence tests
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror test/location_schedule_test.cpp -o /tmp/location-tests
+          /tmp/location-tests
+          g++ -std=c++11 -Wall -Wextra -Werror -Itest/host -Isrc -I.pio/libdeps/esp32-s3-devkitm-1/ArduinoJson/src test/location_manager_test.cpp src/location/location-manager.cpp -o /tmp/location-manager-tests
+          /tmp/location-manager-tests
+          g++ -std=c++11 -Wall -Wextra -Werror -Itest/host -Isrc -I.pio/libdeps/esp32-s3-devkitm-1/ArduinoJson/src test/measurement_configuration_test.cpp src/config/settings-manager.cpp -o /tmp/measurement-configuration-tests
+          /tmp/measurement-configuration-tests

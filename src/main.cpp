@@ -43,6 +43,7 @@ void updateStatusLeds();
 void processPendingWifiConfiguration();
 void processPendingMeasurements();
 void sendStationData();
+void synchronizeMeasurementConfiguration();
 
 void setup()
 {
@@ -140,11 +141,12 @@ void loop()
         stationHttp
     );
 
+    synchronizeMeasurementConfiguration();
     processPendingMeasurements();
 
     const unsigned long currentTime = millis();
 
-    if (currentTime - lastDataTime >= DATA_SEND_INTERVAL_MS)
+    if (currentTime - lastDataTime >= settings.getMeasurementIntervalSeconds() * 1000UL)
     {
         lastDataTime = currentTime;
         sendStationData();
@@ -364,4 +366,41 @@ void sendStationData()
             );
         }
     }
+}
+
+void synchronizeMeasurementConfiguration()
+{
+    static unsigned long lastPoll = 0;
+    static bool attempted = false;
+    if (!wifi.isConnected() || settings.getDeviceId().isEmpty() || settings.getApiToken().isEmpty()) return;
+    const unsigned long now = millis();
+    if (attempted && now - lastPoll < CONFIG_POLL_INTERVAL_MS) return;
+    attempted = true;
+    lastPoll = now;
+    std::string response;
+    if (!stationHttp.getConfiguration(response)) return;
+    JsonDocument doc;
+    if (deserializeJson(doc, response) || !doc["revision"].is<uint32_t>()) return;
+    uint32_t revision = doc["revision"];
+    if (revision > 2147483647U) return;
+    uint32_t seconds = settings.getMeasurementIntervalSeconds();
+    if (!doc["interval_seconds"].isNull())
+    {
+        if (!doc["interval_seconds"].is<uint32_t>()) return;
+        seconds = doc["interval_seconds"];
+        if (!settings.saveMeasurementConfiguration(seconds, revision)) return;
+    }
+    else
+    {
+        // No command yet: report the current/default interval, without replacing it.
+        revision = 0;
+    }
+    JsonDocument report;
+    report["revision"] = revision;
+    report["interval_seconds"] = seconds;
+    report["firmware_version"] = FIRMWARE_VERSION;
+    std::string payload;
+    serializeJson(report, payload);
+    // Repeated confirmation recovers a lost ACK; historical/offline timestamps stay intact.
+    stationHttp.reportConfiguration(payload);
 }

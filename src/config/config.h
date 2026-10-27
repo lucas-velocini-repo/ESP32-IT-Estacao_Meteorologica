@@ -15,7 +15,7 @@
 // ======================================================
 
 constexpr unsigned long
-    DATA_SEND_INTERVAL_MS = 30000;
+    DATA_SEND_INTERVAL_MS = 300000;
 
 // ======================================================
 // I2C
@@ -78,3 +78,7 @@ constexpr uint32_t
 constexpr unsigned long
     GNSS_MAX_FIX_AGE_MS =
         300000;
+constexpr uint32_t MIN_MEASUREMENT_INTERVAL_SECONDS = 30;
+constexpr uint32_t MAX_MEASUREMENT_INTERVAL_SECONDS = 86400;
+constexpr unsigned long CONFIG_POLL_INTERVAL_MS = 60000;
+constexpr const char* FIRMWARE_VERSION = "1.2.0";

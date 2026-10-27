@@ -16,8 +16,10 @@ public:
         const std::string& payload
     );
     bool sendLocation(const std::string& payload);
+    bool getConfiguration(std::string& response);
+    bool reportConfiguration(const std::string& payload);
 
 private:
-    bool request(const std::string& payload, const char* method, bool location);
+    bool request(const std::string& payload, const char* method, bool location, const char* configPath = nullptr, std::string* responseBody = nullptr);
     SettingsManager* settings = nullptr;
 };

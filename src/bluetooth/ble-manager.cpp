@@ -2,12 +2,15 @@
 #include "ble-uuid.h"
 #include "../config/config.h"
 #include "ble-callbacks.h"
+#include "device/device-identity.h"
 
 void BLEManager::begin()
 {
     Serial.println("Inicializando BLE...");
 
-    NimBLEDevice::init(DEVICE_NAME);
+    const String hardwareId = DeviceIdentity::getHardwareId();
+    const String name = "CASA-" + hardwareId.substring(hardwareId.length() - 6);
+    NimBLEDevice::init(name.c_str());
     NimBLEDevice::setMTU(247);
 
     server = NimBLEDevice::createServer();
@@ -32,7 +35,10 @@ void BLEManager::begin()
 
     advertising->addServiceUUID(BLEUUIDs::SERVICE);
 
-    advertising->setName(DEVICE_NAME);
+    // The 128-bit UART UUID plus flags leaves insufficient room for the name.
+    // Put the complete, stable identifier into the active scan response.
+    advertising->enableScanResponse(true);
+    advertising->setName(name.c_str());
 
     advertising->start();
 
