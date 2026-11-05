@@ -16,6 +16,7 @@ private:
     SettingsManager* settings = nullptr;
 
     void handleGetStatus();
+    void handleConfigureInterval(JsonDocument& doc);
 
     void handleConfigureWifi(
         JsonDocument& doc
@@ -41,6 +42,7 @@ private:
     PendingWifiConfig pendingWifiConfig;
 
 public:
+    void sendStatus() { handleGetStatus(); }
     void begin(
         BLEManager& ble,
         WiFiManager& wifi,

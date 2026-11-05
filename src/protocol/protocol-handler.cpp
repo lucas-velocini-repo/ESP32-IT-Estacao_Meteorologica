@@ -1,6 +1,7 @@
 #include "protocol-handler.h"
 #include <ArduinoJson.h>
 #include "device/device-identity.h"
+#include "config/config.h"
 
 void ProtocolHandler::begin(
     BLEManager& ble,
@@ -50,6 +51,11 @@ void ProtocolHandler::handle(
         handleConfigureWifi(doc);
         return;
     }
+    if(strcmp(command, "configure_interval") == 0)
+    {
+        handleConfigureInterval(doc);
+        return;
+    }
 
     if(strcmp(command, "save_identity") == 0)
     {
@@ -72,6 +78,11 @@ void ProtocolHandler::handleGetStatus()
 
     response["type"] = "status";
     response["bluetooth"] = true;
+    response["bleFraming"] = true;
+    response["stationName"] = settings->getStationName();
+    response["server"] = settings->getServer();
+    response["intervalSeconds"] = settings->getMeasurementIntervalSeconds();
+    response["bleIntervalSupported"] = true;
 
     response["hardwareId"] =
     DeviceIdentity::getHardwareId();
@@ -180,6 +191,7 @@ void ProtocolHandler::handleSaveIdentity(
     settings->saveApiToken(
         String(apiToken)
     );
+    settings->saveStationName(String(doc["stationName"] | ""));
 
     JsonDocument response;
 
@@ -199,6 +211,29 @@ void ProtocolHandler::handleSaveIdentity(
         json
     );
 
+    ble->send(json);
+}
+
+void ProtocolHandler::handleConfigureInterval(JsonDocument& doc)
+{
+    JsonDocument response;
+    response["type"] = "interval_result";
+    response["status"] = "error";
+    if (settings->getDeviceId().isEmpty() || settings->getApiToken().isEmpty())
+        response["message"] = "Provisione a estação antes de configurar o intervalo.";
+    else if (!doc["intervalSeconds"].is<uint32_t>() ||
+             doc["intervalSeconds"].as<uint32_t>() < MIN_MEASUREMENT_INTERVAL_SECONDS ||
+             doc["intervalSeconds"].as<uint32_t>() > MAX_MEASUREMENT_INTERVAL_SECONDS)
+        response["message"] = "Intervalo inválido: use de 30 a 86400 segundos.";
+    else if (!settings->saveMeasurementConfiguration(doc["intervalSeconds"].as<uint32_t>(), settings->getConfigurationRevision(), true))
+        response["message"] = "Falha ao persistir o intervalo. Tente novamente.";
+    else
+    {
+        response["status"] = "ok";
+        response["intervalSeconds"] = settings->getMeasurementIntervalSeconds();
+    }
+    std::string json;
+    serializeJson(response, json);
     ble->send(json);
 }
 

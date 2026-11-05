@@ -1,5 +1,32 @@
 # Firmware — CASA
 
+## Correção BLE 1.3.1
+
+Corrige respostas JSON fragmentadas perdidas quando `get_status` chegava ao firmware,
+mas o app permanecia em “Verificando o cadastro da estação”. O envio anterior usava
+`setValue` e `notify()` dentro do callback de escrita; o NimBLE podia processar depois
+apenas o último valor da característica, substituindo os fragmentos anteriores.
+
+As respostas agora são enfileiradas até o cliente ativar notificações e enviadas no
+loop principal com bytes explícitos para cada fragmento e conexão. Falhas temporárias
+são repetidas sem avançar o fragmento; desconectar descarta respostas da sessão antiga.
+O monitor informa a versão, a ativação das notificações e a quantidade de bytes enviada,
+sem imprimir credenciais. Há teste do transporte real com adaptador NimBLE simulado,
+incluindo MTU pequeno, inscrição atrasada, perda de conexão e falha de envio.
+
+Para aplicar, faça somente o upload normal do firmware. Não é necessário apagar flash,
+NVS, identidade, token ou fila. Esta correção não exige novo APK nem migração do servidor.
+O teste C++ do transporte e a compilação completa ESP32-S3 passaram em 04/11/2026;
+o comportamento no celular ainda precisa ser confirmado na bancada.
+
+## Atualização BLE 1.3.0
+
+O status informa o nome configurado, o servidor, o intervalo atual e suporte a `configure_interval`. Esse comando aceita segundos inteiros de 30 a 86400, persiste no NVS antes de emitir `interval_result` e não exige rede. No aplicativo oficial, a função é restrita à sessão administrativa; o protocolo BLE não autentica contas de clientes externos.
+
+O nome anunciado inclui um sufixo estável do hardware. Mensagens JSON usam UTF-8 e podem ser fragmentadas conforme o MTU, delimitadas por nova linha. JSON completo sem delimitador continua aceito para comandos legados. O status indica `bleFraming` para o app negociar esse transporte.
+
+Alterações BLE são preservadas após reinicialização e posteriormente relatadas à API com `source: "ble"`. Atualize o backend com suporte a esse campo antes de validar a sincronização. Comandos antigos de rede não desfazem uma mudança BLE; uma nova revisão do site continua tendo precedência. O intervalo padrão é cinco minutos. Não houve gravação automática em estações físicas.
+
 Firmware das estações de monitoramento ambiental do projeto **CASA — Central de Acompanhamento de Saúde e Ambiente**.
 
 O firmware é executado em um **ESP32-S3** e é responsável pela aquisição dos sensores ambientais, configuração da estação via Bluetooth Low Energy (BLE), conexão Wi-Fi, sincronização de horário, comunicação com a API do CASA e armazenamento local temporário das medições quando o servidor não está disponível.
@@ -646,3 +673,31 @@ Cobre obtenção sem NTP, recuperação após reinicialização, precisão das c
 retentativa de envio com horário original, confirmação de persistência, atualização
 diária, descarte de posição de outro cadastro e falha de gravação antes do envio.
 Esses adaptadores não são incluídos no firmware e não substituem os testes na placa.
+
+## Intervalo de aquisição pela rede (firmware 1.2.0)
+
+O padrão para uma estação sem configuração persistida é **300 segundos (5 minutos)**.
+O administrador solicita um intervalo entre **30 e 86400 segundos** no site ou no
+aplicativo. A estação inicia uma consulta autenticada a `GET /api/devices/config`
+a cada 60 segundos, persiste intervalo/revisão juntos em NVS e confirma com
+`POST /api/devices/config/report`. Não é necessário abrir portas no roteador da casa.
+Uma falha na confirmação é recuperada na consulta seguinte; sem rede, a estação
+continua com o último intervalo salvo. A fila offline mantém os timestamps originais.
+O painel distingue intervalo solicitado e confirmado. Só se confirma depois de
+salvar em NVS; falha de gravação não aplica o comando.
+
+É necessário atualizar o backend antes deste firmware e gravar esta versão uma vez
+por USB. Não há atualização remota do firmware neste recurso. Não execute erase flash
+nem apague NVS/LittleFS para atualizar: mantenha identidade, Wi-Fi e fila de medições.
+Se a instalação depende de HTTP temporário, use no servidor a versão atualizada de
+`infra/Caddyfile.http-ingestion`, que também permite os dois caminhos de configuração
+com credencial de estação. O transporte HTTP mantém a limitação de não cifrar a conexão.
+
+No scan BLE, o novo anúncio envia `CASA-` mais os seis últimos dígitos do hardware ID
+na resposta de scan, junto ao serviço UART anunciado. O app também exibe o identificador
+Bluetooth para distinguir unidades, incluindo firmware anterior sem nome no anúncio.
+
+Teste em uma estação de bancada: solicite 60 s; aguarde o estado aplicado; compare
+pelo menos três timestamps novos; reinicie a estação e confirme a persistência;
+desligue a rede, solicite 120 s, confira pendente e reconecte; por fim retorne a 300 s.
+A alteração não reescreve medições anteriores e não altera a agenda diária do GPS.

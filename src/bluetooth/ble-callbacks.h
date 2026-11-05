@@ -33,7 +33,7 @@ public:
         NimBLEServer* server,
         NimBLEConnInfo& connInfo) override
     {
-        ble->handleConnect();
+        ble->handleConnect(connInfo.getConnHandle());
     }
 
     void onDisconnect(
@@ -41,9 +41,21 @@ public:
         NimBLEConnInfo& connInfo,
         int reason) override
     {
-        ble->handleDisconnect();
+        ble->handleDisconnect(connInfo.getConnHandle());
     }
 
+private:
+    BLEManager* ble;
+};
+
+class NotificationCallbacks : public NimBLECharacteristicCallbacks
+{
+public:
+    explicit NotificationCallbacks(BLEManager* ble) : ble(ble) {}
+    void onSubscribe(NimBLECharacteristic*, NimBLEConnInfo& info, uint16_t value) override
+    {
+        ble->handleSubscribe(info.getConnHandle(), value);
+    }
 private:
     BLEManager* ble;
 };

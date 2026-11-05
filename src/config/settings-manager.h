@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <mutex>
 #include "sensors/sensor-data.h"
 
 class SettingsManager
@@ -23,6 +24,17 @@ public:
 
     void saveApiToken(const String& apiToken);
 
+    uint32_t getMeasurementIntervalSeconds();
+    uint32_t getConfigurationRevision();
+    bool saveMeasurementConfiguration(uint32_t seconds, uint32_t revision, bool bleOverride = false);
+    bool hasBleIntervalOverride();
+    void confirmBleInterval(uint32_t seconds, uint32_t revision);
+    bool applyRemoteMeasurementConfiguration(uint32_t seconds, uint32_t revision);
+    struct MeasurementConfiguration { uint32_t seconds; uint32_t revision; bool bleOverride; };
+    MeasurementConfiguration getMeasurementConfiguration();
+    String getStationName();
+    void saveStationName(const String& name);
+
     String getDeviceId();
 
     String getApiToken();
@@ -35,6 +47,10 @@ public:
 
 private:
     Preferences preferences;
+    uint32_t measurementIntervalSeconds = 300;
+    uint32_t configurationRevision = 0;
+    bool bleIntervalOverride = false;
+    std::recursive_mutex intervalMutex;
 };
 
 class HttpClient

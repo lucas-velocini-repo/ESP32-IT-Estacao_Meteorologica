@@ -22,7 +22,17 @@ bool StationHttpClient::sendLocation(const std::string& payload)
     return request(payload, "PATCH", true);
 }
 
-bool StationHttpClient::request(const std::string& payload, const char* method, bool location)
+bool StationHttpClient::getConfiguration(std::string& response)
+{
+    return request("", "GET", false, "/devices/config", &response);
+}
+
+bool StationHttpClient::reportConfiguration(const std::string& payload)
+{
+    return request(payload, "POST", false, "/devices/config/report");
+}
+
+bool StationHttpClient::request(const std::string& payload, const char* method, bool location, const char* configPath, std::string* responseBody)
 {
     if(settings == nullptr)
     {
@@ -56,7 +66,7 @@ bool StationHttpClient::request(const std::string& payload, const char* method, 
         return false;
     }
 
-    if (location)
+    if (location || configPath != nullptr)
     {
         while (serverUrl.endsWith("/")) serverUrl.remove(serverUrl.length() - 1);
         if (!serverUrl.endsWith("/measurements"))
@@ -65,11 +75,11 @@ bool StationHttpClient::request(const std::string& payload, const char* method, 
             return false;
         }
         serverUrl.remove(serverUrl.length() - String("/measurements").length());
-        serverUrl += "/devices/location";
+        serverUrl += configPath != nullptr ? configPath : "/devices/location";
     }
 
     HTTPClient http;
-    if (location)
+    if (location || configPath != nullptr)
     {
         http.setConnectTimeout(3000);
         http.setTimeout(3000);
@@ -147,6 +157,8 @@ bool StationHttpClient::request(const std::string& payload, const char* method, 
 
     String response =
         http.getString();
+
+    if (responseBody != nullptr) *responseBody = response.c_str();
 
     if(response.length() > 0)
     {

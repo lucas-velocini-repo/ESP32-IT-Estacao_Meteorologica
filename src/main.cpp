@@ -43,10 +43,12 @@ void updateStatusLeds();
 void processPendingWifiConfiguration();
 void processPendingMeasurements();
 void sendStationData();
+void synchronizeMeasurementConfiguration();
 
 void setup()
 {
     Serial.begin(19200);
+    Serial.printf("[Firmware] Versao: %s\n", FIRMWARE_VERSION);
 
     if (TEST_MODE)
     {
@@ -140,11 +142,12 @@ void loop()
         stationHttp
     );
 
+    synchronizeMeasurementConfiguration();
     processPendingMeasurements();
 
     const unsigned long currentTime = millis();
 
-    if (currentTime - lastDataTime >= DATA_SEND_INTERVAL_MS)
+    if (currentTime - lastDataTime >= settings.getMeasurementIntervalSeconds() * 1000UL)
     {
         lastDataTime = currentTime;
         sendStationData();
@@ -211,24 +214,8 @@ void processPendingWifiConfiguration()
 
         if (connected)
         {
-            JsonDocument status;
-
-            status["type"] = "status";
-            status["hardwareId"] = DeviceIdentity::getHardwareId();
-            status["deviceId"] = settings.getDeviceId();
-            status["apiTokenConfigured"] =
-                settings.getApiToken().length() > 0;
-            status["bluetooth"] = true;
-            status["wifiConnected"] = true;
-            status["ssid"] = wifi.getSSID();
-            status["ip"] = wifi.getIP();
-
-            std::string statusJson;
-            serializeJson(status, statusJson);
-
             delay(200);
-
-            ble.send(statusJson);
+            protocol.sendStatus();
         }
 
         updateStatusLeds();
@@ -364,4 +351,42 @@ void sendStationData()
             );
         }
     }
+}
+
+void synchronizeMeasurementConfiguration()
+{
+    static unsigned long lastPoll = 0;
+    static bool attempted = false;
+    if (!wifi.isConnected() || settings.getDeviceId().isEmpty() || settings.getApiToken().isEmpty()) return;
+    const unsigned long now = millis();
+    if (attempted && now - lastPoll < CONFIG_POLL_INTERVAL_MS) return;
+    attempted = true;
+    lastPoll = now;
+    std::string response;
+    if (!stationHttp.getConfiguration(response)) return;
+    JsonDocument doc;
+    if (deserializeJson(doc, response) || !doc["revision"].is<uint32_t>()) return;
+    uint32_t revision = doc["revision"];
+    if (revision > 2147483647U) return;
+    if (!doc["interval_seconds"].isNull())
+    {
+        if (!doc["interval_seconds"].is<uint32_t>()) return;
+        // A previous network command must not undo a newer local BLE setting.
+        // A new server revision still takes precedence when it arrives.
+        if (!settings.applyRemoteMeasurementConfiguration(doc["interval_seconds"].as<uint32_t>(), revision)) return;
+    }
+    const auto configuration = settings.getMeasurementConfiguration();
+    revision = configuration.revision;
+    const uint32_t seconds = configuration.seconds;
+    JsonDocument report;
+    report["revision"] = revision;
+    report["interval_seconds"] = seconds;
+    report["firmware_version"] = FIRMWARE_VERSION;
+    const bool bleOverride = configuration.bleOverride;
+    report["source"] = bleOverride ? "ble" : "remote";
+    std::string payload;
+    serializeJson(report, payload);
+    // Repeated confirmation recovers a lost ACK; historical/offline timestamps stay intact.
+    if (stationHttp.reportConfiguration(payload) && bleOverride)
+        settings.confirmBleInterval(seconds, revision);
 }
