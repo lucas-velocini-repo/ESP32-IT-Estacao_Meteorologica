@@ -50,18 +50,21 @@ namespace Pins
     // ==================================================
     // LEDs BICOLORES
     //
-    // Pinagem preservada dos sources. Confira a fiação antes do upload.
+    // Pinagem corrigida conforme a montagem: LED1 BLE, LED2 Wi-Fi, LED3 fonte.
     // Cátodo comum: cada anodo usa seu próprio resistor.
     // ==================================================
 
-    constexpr uint8_t LED1_RED = 4;
-    constexpr uint8_t LED1_BLUE = 5;
+    // LED1: Bluetooth (par físico GPIO13/14).
+    constexpr uint8_t LED1_RED = 14;
+    constexpr uint8_t LED1_BLUE = 13;
 
-    constexpr uint8_t LED2_RED = 11;
-    constexpr uint8_t LED2_BLUE = 12;
+    // LED2: Wi-Fi (par físico GPIO11/12).
+    constexpr uint8_t LED2_RED = 12;
+    constexpr uint8_t LED2_BLUE = 11;
 
-    constexpr uint8_t LED3_RED = 13;
-    constexpr uint8_t LED3_BLUE = 14;
+    // LED3: fonte de alimentação (par físico GPIO4/5).
+    constexpr uint8_t LED3_RED = 5;
+    constexpr uint8_t LED3_BLUE = 4;
 
     constexpr int8_t INTERNAL_RGB_LED = 48;
     // -1 = não existe controle elétrico instalado. Use EN/load switch,

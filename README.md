@@ -194,13 +194,13 @@ A função usa `analogWrite` em todos os modos, inclusive no teste. O projeto co
 | I2C SDA / SCL | 8 / 9 | AHT20, BMP280, BH1750, SPS30 |
 | GNSS RX / TX do ESP32 | 18 / 17 | TX do GPS → RX do ESP32; RX do GPS → TX do ESP32 |
 | POWER_SOURCE | 7 | HIGH: fonte; LOW: bateria |
-| LED1 vermelho / azul | 4 / 5 | Conexão BLE no normal |
-| LED2 vermelho / azul | 11 / 12 | Conexão Wi-Fi no normal |
-| LED3 vermelho / azul | 13 / 14 | Fonte no normal; pulso vermelho na bateria |
+| LED1 vermelho / azul | 14 / 13 | Conexão BLE no normal |
+| LED2 vermelho / azul | 12 / 11 | Conexão Wi-Fi no normal |
+| LED3 vermelho / azul | 5 / 4 | Fonte no normal; pulso vermelho na bateria |
 | RGB interno | 48 | Apagado por quadro RGB preto |
 | GNSS_POWER_ENABLE | -1 | Controle físico opcional, desabilitado até escolher um GPIO livre |
 
-**A pinagem acima foi mantida do ZIP/repositório. Confira sua montagem.** Se, por exemplo, o LED azul estiver no GPIO4 em vez de GPIO5, ou seu LED2 usar GPIO10, altere as constantes em `Pins` antes de gravar.
+**Pinagem corrigida conforme a montagem informada:** vermelho e azul foram invertidos nos três LEDs, e os pares físicos da fonte e do Bluetooth foram trocados. Os nomes lógicos continuam sendo LED1 = Bluetooth, LED2 = Wi-Fi e LED3 = fonte; todas as rotinas usam essas constantes de `Pins`.
 
 | Modo | LED1 | LED2 | LED3 |
 | --- | --- | --- | --- |
@@ -285,6 +285,13 @@ Na bancada, valide esta sequência antes de integrar na `main`:
 ## Atualizações e changelog
 
 Registre cada mudança aqui com data, versão, comportamento e validação. Alterações novas entram no topo.
+
+### Correção da pinagem dos LEDs — 16/11/2026
+
+- Invertidos os pinos RED e BLUE dos três LEDs bicolores.
+- Trocados os pares físicos usados para Bluetooth e fonte, mantendo LED1 = Bluetooth, LED2 = Wi-Fi e LED3 = fonte.
+- Mapa corrigido (vermelho/azul): Bluetooth GPIO14/GPIO13; Wi-Fi GPIO12/GPIO11; fonte GPIO5/GPIO4.
+- Atualizada a tabela de pinagem; o PWM e as rotinas de sinalização continuam centralizados em StatusLeds.
 
 ### 1.4.0-dev — 16/11/2026
 
