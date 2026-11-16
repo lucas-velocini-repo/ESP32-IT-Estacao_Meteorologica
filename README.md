@@ -1,16 +1,22 @@
 # Índice
 
-- [Instalação do PlatformIO e uso](#instalacao)
-- [Funcionamento geral e diagrama](#funcionamento)
-- [Configuração dos LEDs e pinagem](#leds)
-- [Economia de bateria e limites físicos](#bateria)
-- [Armazenamento e retorno da fonte](#armazenamento)
-- [Validação e testes](#validacao)
-- [Atualizações e changelog](#changelog)
-- [Descrição de cada arquivo](#arquivos)
+- [Visão geral](#visao-geral)
+- [Ambiente de desenvolvimento e instalação](#instalacao)
+- [Arquitetura e fluxo de execução](#arquitetura)
+- [Modos de operação](#modos)
+- [Interfaces de hardware e pinagem](#hardware)
+- [Parâmetros de configuração](#parametros)
+- [Sinalização por LEDs](#leds)
+- [Aquisição GNSS e gerenciamento de localização](#gnss)
+- [Comunicação e formato dos dados](#comunicacao)
+- [Persistência e recuperação de registros](#persistencia)
+- [Gerenciamento de energia](#energia)
+- [Compilação e testes](#testes)
+- [Changelog](#changelog)
+- [Referência dos arquivos](#arquivos)
 
 <details>
-<summary><strong>Índice clicável de todos os arquivos do projeto</strong></summary>
+<summary><strong>Índice de arquivos e responsabilidades</strong></summary>
 
 | Arquivo | Função |
 | --- | --- |
@@ -106,236 +112,433 @@
 
 </details>
 
-# Firmware CASA — development
+<a id="visao-geral"></a>
+# Firmware CASA
 
-Estação ambiental com ESP32-S3, AHT20, BMP280, BH1750, SPS30 e GNSS opcional. A branch `development` concentra esta reorganização; `main` permanece na versão anterior até uma futura integração.
+Firmware de aquisição ambiental para ESP32-S3, responsável pela leitura de sensores, provisionamento Bluetooth Low Energy, comunicação com a API CASA e persistência local de medições. A seleção entre diagnóstico de hardware, operação normal e operação em bateria é realizada pelo controlador de rotinas.
+
+| Propriedade | Definição |
+| --- | --- |
+| Plataforma de execução | ESP32-S3 |
+| Ambiente PlatformIO | `esp32-s3-devkitm-1` |
+| Framework | Arduino |
+| Versão do firmware | `1.4.0-dev` |
+| Sensores ambientais | AHT20, BMP280, BH1750 e SPS30 |
+| Receptor de posicionamento | GNSS por UART; integração com NEO-6M e TinyGPSPlus |
+| Persistência | NVS para configuração/localização; LittleFS para registros JSONL |
+| Comunicação externa | BLE para provisionamento; Wi-Fi e HTTP para integração com a API |
 
 <a id="instalacao"></a>
-## Instalação do PlatformIO e uso
+## Ambiente de desenvolvimento e instalação
 
-1. Instale o [Visual Studio Code](https://code.visualstudio.com/).
-2. Abra Extensões (`Ctrl+Shift+X`), procure **PlatformIO IDE**, da PlatformIO, e instale. Aguarde a instalação inicial e reinicie o editor se solicitado. O PlatformIO Core já vem junto da extensão.
-3. Instale o [Git](https://git-scm.com/downloads) se quiser acompanhar a branch. No terminal:
+### Dependências
 
-   ```bash
-   git clone --branch development https://github.com/lucas-velocini-repo/ESP32-IT-Estacao_Meteorologica.git
-   cd ESP32-IT-Estacao_Meteorologica
-   ```
+A configuração de compilação é declarada em [platformio.ini](platformio.ini).
 
-   Também é possível selecionar `development` no GitHub, baixar **Code → Download ZIP** e extrair.
-4. No VS Code, escolha **File → Open Folder** e abra a pasta que contém `platformio.ini`. Não abra somente `src`. Aguarde o carregamento das dependências.
-5. Confira a pinagem em [config.h](src/config/config.h), especialmente os LEDs e `POWER_SOURCE`. Se houver um interruptor eletrônico de alimentação GNSS, configure `GNSS_POWER_ENABLE`; o padrão `-1` significa sem controle físico instalado.
-6. Escolha `TEST_MODE` em [main.cpp](src/main.cpp): `true` para diagnóstico; `false` para operação automática pela fonte.
-7. Conecte a placa com um cabo USB de dados. Use **PlatformIO: Build** (ícone de verificação) e **PlatformIO: Upload** (seta). O ambiente é `esp32-s3-devkitm-1`.
-8. Abra **PlatformIO: Serial Monitor**, a **19200 baud**. Se a porta não for detectada, selecione a porta em Devices ou informe-a no comando abaixo.
+| Dependência | Versão declarada | Responsabilidade |
+| --- | --- | --- |
+| Plataforma Espressif32 | `6.12.0` | Toolchain e suporte ao ESP32-S3 |
+| NimBLE-Arduino | `2.5.0` | Serviço e transporte BLE |
+| ArduinoJson | `7.4.3` | Serialização e interpretação JSON |
+| Adafruit AHTX0 | Sem versão fixada | Aquisição AHT20 |
+| Adafruit BMP280 Library | Sem versão fixada | Aquisição BMP280 |
+| Sensirion Core | Tag `0.7.3` | Camada de comunicação Sensirion |
+| Sensirion I2C SPS30 | Tag `1.0.1` | Protocolo do SPS30 |
+| BH1750 | `1.3.0` | Aquisição de iluminância |
+| TinyGPSPlus | `1.1.0` | Decodificação das mensagens GNSS |
 
-No terminal **PlatformIO Core CLI** do VS Code, os equivalentes são:
+### Instalação no VS Code
+
+1. Instalar o [Visual Studio Code](https://code.visualstudio.com/) e a extensão **PlatformIO IDE**, publicada pela PlatformIO.
+2. Clonar o repositório ou extrair o arquivo de distribuição do código.
+3. Abrir, no VS Code, o diretório que contém `platformio.ini`. A extensão utiliza esse arquivo para identificar o ambiente e resolver as dependências.
+4. Executar **PlatformIO: Build**, **PlatformIO: Upload** e **PlatformIO: Serial Monitor** para compilação, gravação e diagnóstico.
+
+O PlatformIO Core é incluído na extensão. A instalação e o uso da interface estão descritos na [documentação oficial do PlatformIO](https://docs.platformio.org/en/latest/integration/ide/vscode.html).
 
 ```bash
-pio run
-pio run --target upload --upload-port COM13
+git clone --branch development https://github.com/lucas-velocini-repo/ESP32-IT-Estacao_Meteorologica.git
+cd ESP32-IT-Estacao_Meteorologica
+pio pkg install
+pio run -e esp32-s3-devkitm-1
+```
+
+### Gravação e monitoramento
+
+```bash
+pio run -e esp32-s3-devkitm-1 --target upload --upload-port COM13
 pio device monitor --port COM13 --baud 19200
 ```
 
-Troque `COM13` pela porta exibida no seu computador; em Linux costuma ser `/dev/ttyUSB0` ou `/dev/ttyACM0`. Feche o monitor se ele estiver ocupando a porta durante o upload. Se o upload não iniciar, segure **BOOT**, pressione **RESET**, solte RESET e depois BOOT e tente novamente.
+`COM13` representa uma porta de exemplo. A opção `--upload-port` pode ser omitida para detecção automática. Em Linux, as portas normalmente são expostas como `/dev/ttyUSB0` ou `/dev/ttyACM0`.
 
-Para uma nova estação, inicie com fonte externa (`POWER_SOURCE=HIGH`) e `TEST_MODE=false`; use o aplicativo CASA para salvar identidade/token, nome, servidor e rede. A URL de ingestão deve terminar em `/measurements` (por exemplo, `http://servidor:porta/api/measurements`). Os caminhos de posição e configuração são derivados dessa URL. Credenciais ficam no NVS, não no código.
+A gravação de firmware utiliza a partição de programa. Operações de apagamento completo da flash ou gravação de imagem do filesystem podem remover configurações NVS e registros LittleFS.
 
-Para atualizar uma estação cadastrada, faça upload normal do firmware. Não use **Erase Flash** nem **Upload Filesystem Image**, pois podem apagar cadastro, dados ou fila. O ESP32 precisa receber um sinal de **0 ou 3,3 V** em `POWER_SOURCE`, com GND comum e sem entrada flutuante.
+### Provisionamento
 
-Referência: [instalação oficial do PlatformIO no VS Code](https://docs.platformio.org/en/latest/integration/ide/vscode.html).
+O provisionamento ocorre no modo normal, com `TEST_MODE=false` e `POWER_SOURCE=HIGH`. O cliente BLE configura identificação da estação, token de API, nome, rede e URL de ingestão. Os valores são persistidos no NVS.
 
-<a id="funcionamento"></a>
-## Funcionamento geral e diagrama
+A URL configurada deve terminar em `/measurements` para a derivação das rotas de localização e configuração. O formato dos comandos e das requisições está descrito em [Comunicação e formato dos dados](#comunicacao).
 
-`main.cpp` apenas entrega o controle ao `RoutineController`. A variável `TEST_MODE` tem prioridade sobre a fonte. Com teste desativado, HIGH seleciona operação normal e LOW seleciona bateria. A fonte é acompanhada durante a execução e a troca ocorre após 50 ms de estabilidade, sem reinicializar o ESP32 ou reabrir o NVS.
+<a id="arquitetura"></a>
+## Arquitetura e fluxo de execução
+
+[main.cpp](src/main.cpp) contém os pontos de entrada Arduino `setup()` e `loop()` e a constante `TEST_MODE`. A execução é delegada ao `RoutineController`.
+
+O controlador mantém um `StationContext` com configurações, sensores, relógio, localização e armazenamento. A infraestrutura de Wi-Fi, BLE, protocolo e HTTP pertence à rotina normal.
 
 ```mermaid
 flowchart TD
-    Main["main.cpp: setup e loop"] --> Controller["routine-controller.cpp"]
+    Main["main.cpp: setup e loop"] --> Controller["RoutineController"]
     Controller --> Test["Teste: hardware-test.h"]
     Controller --> Normal["Fonte HIGH: normal-routine.cpp"]
     Controller --> Battery["Fonte LOW: battery-routine.cpp"]
-    Test --> Hardware["Sensores, GNSS e LEDs externos"]
-    Normal --> NormalSensors["sensor-manager: sensores"]
+    Test --> TestHardware["Sensores, GNSS e LEDs externos"]
+    Normal --> NormalSensors["SensorManager: aquisição"]
     Normal --> Online["Wi-Fi, BLE, NTP, GNSS e HTTP"]
-    Battery --> BatterySensors["sensor-manager: coleta sob demanda"]
+    Battery --> BatterySensors["SensorManager: aquisição sob demanda"]
     Battery --> Offline["LittleFS, LED da fonte e light sleep"]
 ```
 
-### Rotina de testes
+As transições normal/bateria são confirmadas após `POWER_DEBOUNCE_MS` de estabilidade. O NVS e os serviços locais permanecem inicializados durante a troca de rotina. Tarefas da rotina anterior deixam de ser chamadas enquanto o controlador confirma uma mudança de alimentação.
 
-`HardwareTest::begin/update`, em [hardware-test.h](src/hardware-test.h), inicializa sensores e GNSS. Lê os sensores a cada 2 s e alterna **os três LEDs externos** entre vermelho, azul e ambos, com 1 s por estado. Não inicia Wi-Fi/BLE nem envia dados. A regra de apagar todos os outros LEDs na bateria vale para a rotina de bateria; o teste é uma seleção manual prioritária.
+<a id="modos"></a>
+## Modos de operação
 
-### Rotina normal
+| TEST_MODE | POWER_SOURCE | Modo |
+| --- | --- | --- |
+| `true` | Qualquer nível | Teste de hardware |
+| `false` | `HIGH` | Operação normal |
+| `false` | `LOW` | Operação em bateria |
 
-Mantém aquisição, provisionamento BLE, reconexão Wi-Fi, sincronização NTP, consulta/confirmação do intervalo remoto, posição GNSS e reenvio da fila. O intervalo padrão é **300 s (5 min)** e a última configuração persistida continua valendo.
+### Teste de hardware
 
-A medição normal exige identidade, token e UTC válido. O JSON tem `device_id`, `timestamp` Unix em UTC, `latitude/longitude` opcionais, `pm`, `nc`, `typical_size`, `light`, `temperature`, `humidity` e `pressure`. PM usa µg/m³, concentrações numéricas usam #/cm³, tamanho usa µm, temperatura °C, umidade %, pressão hPa e luz lx.
+Implementado por `HardwareTest::begin()` e `HardwareTest::update()` em [hardware-test.h](src/hardware-test.h).
 
-A localização aceita um fix novo/recente no início e a cada 24 h. Cada busca pode durar 5 min; falha provoca nova tentativa após 15 min. A posição é salva no NVS e sua ausência não bloqueia as medições ambientais. Em bateria, só se reutiliza uma posição já armazenada da mesma identidade.
+- Inicializa o barramento I2C, os sensores e a UART GNSS.
+- Processa a recepção GNSS a cada passagem pelo controlador.
+- Executa leituras ambientais e apresenta o estado do GNSS a cada 2000 ms.
+- Alterna os três LEDs externos entre vermelho, azul e ambos, com 1000 ms por estado.
+- Opera sem inicializar Wi-Fi/BLE e sem persistência ou envio de medições.
 
-O intervalo remoto é consultado a cada 60 s por `GET /devices/config` e confirmado em `POST /devices/config/report`. Via BLE, `configure_interval` aceita 30 a 86400 s. Configurações BLE ficam persistidas e uma revisão remota antiga não as desfaz. BLE é acessível somente no normal; o teste de hardware não inicia essa pilha.
+O modo de teste tem prioridade sobre a entrada de alimentação: a transição de `POWER_SOURCE` para LOW não seleciona a rotina de bateria enquanto `TEST_MODE=true`.
+
+### Operação normal
+
+Implementada em [normal-routine.cpp](src/routines/normal-routine.cpp).
+
+1. Habilita os recursos de operação normal e inicia recepção GNSS, BLE e conexão Wi-Fi.
+2. Solicita sincronização NTP e acompanha o relógio no ciclo de execução.
+3. Processa comandos de configuração e atualizações de localização.
+4. Consulta a configuração remota e confirma o intervalo efetivamente persistido.
+5. Reenvia registros pendentes quando a conexão está disponível.
+6. Realiza aquisição e tentativa de envio de acordo com o intervalo configurado.
+
+A aquisição normal exige identificação da estação, token configurado e horário UTC válido. Ausência de localização GNSS não bloqueia a aquisição ambiental; as coordenadas são serializadas como `null` quando indisponíveis.
+
+### Operação em bateria
+
+Implementada em [battery-routine.cpp](src/routines/battery-routine.cpp). Não inicializa nem consulta interfaces Wi-Fi, BLE, NTP ou UART GNSS. As coletas são encaminhadas ao armazenamento local.
+
+| Fase | Operação |
+| --- | --- |
+| Repouso | Aguarda o prazo de aquisição e mantém os sensores em seus estados de baixo consumo |
+| Estabilização | Acorda/inicia o SPS30 e aguarda `SPS30_WARMUP_MS` |
+| Conversão de luz | Solicita uma medição única do BH1750 e aguarda `LIGHT_CONVERSION_MS` |
+| Aquisição | Solicita amostra do SPS30 e lê os demais sensores; repete a tentativa de PM até o timeout |
+| Persistência | Suspende as medições, grava o registro e agenda o próximo ciclo |
+
+No timeout de partículas, os demais sensores são capturados e os campos de PM indisponíveis permanecem `null`. Uma falha ao iniciar o SPS30 suprime a espera de estabilização, mantendo o tratamento de timeout e a aquisição das outras grandezas.
+
+O primeiro ciclo é iniciado na entrada do modo de bateria. O prazo do ciclo seguinte é calculado por:
+
+```text
+t_proximo = max(t_inicio + intervalo_configurado, t_fim + MIN_SLEEP_MS)
+```
+
+Assim, intervalos menores que o tempo de aquisição e repouso resultam em um período efetivo maior que o valor configurado. O retorno da fonte encerra a rotina de bateria e cancela uma aquisição ainda incompleta.
+
+<a id="hardware"></a>
+## Interfaces de hardware e pinagem
+
+A pinagem é declarada no namespace `Pins` de [config.h](src/config/config.h). O barramento I2C opera a 100 kHz. As interfaces digitais do ESP32-S3 utilizam nível lógico de 3,3 V.
+
+| Interface | Sinal | GPIO |
+| --- | --- | --- |
+| I2C | SDA | 8 |
+| I2C | SCL | 9 |
+| UART GNSS | RX do ESP32, conectado ao TX do receptor | 18 |
+| UART GNSS | TX do ESP32, conectado ao RX do receptor | 17 |
+| Alimentação | `POWER_SOURCE` | 7 |
+| LED RGB endereçável | Dados | 48 |
+| Alimentação GNSS | `GNSS_POWER_ENABLE` | `-1`: saída não configurada |
+
+`POWER_SOURCE` é uma entrada fornecida pelo circuito de alimentação: HIGH indica fonte externa e LOW indica bateria. A entrada requer referência de GND comum e nível definido.
+
+Os LEDs externos são bicolores de cátodo comum, com resistor limitador em cada anodo.
+
+| Identificador lógico | Função | RED | BLUE |
+| --- | --- | --- | --- |
+| LED1 | Bluetooth | GPIO14 | GPIO13 |
+| LED2 | Wi-Fi | GPIO12 | GPIO11 |
+| LED3 | Alimentação | GPIO5 | GPIO4 |
+
+| Sensor | Grandezas | Interface/endereço |
+| --- | --- | --- |
+| AHT20 | Temperatura e umidade relativa | I2C `0x38` |
+| BMP280 | Pressão atmosférica | I2C `0x77` ou `0x76` |
+| BH1750 | Iluminância | I2C `0x23` |
+| SPS30 | Material particulado e concentração numérica | I2C `0x69` |
+| GNSS | Posição, altitude, satélites, HDOP e UTC | `Serial1`, 9600 bit/s, 8N1 |
+
+<a id="parametros"></a>
+## Parâmetros de configuração
+
+| Parâmetro | Valor padrão | Definição |
+| --- | --- | --- |
+| `TEST_MODE` | `false` | Seleção de diagnóstico em `main.cpp` |
+| `DATA_SEND_INTERVAL_MS` | 300000 ms | Intervalo inicial de aquisição |
+| Intervalo persistido de aquisição | 30 a 86400 s | Configuração em `SettingsManager` |
+| `CONFIG_POLL_INTERVAL_MS` | 60000 ms | Período de consulta da configuração remota |
+| `GNSS_BAUD_RATE` | 9600 bit/s | Velocidade da UART GNSS |
+| `GNSS_MAX_FIX_AGE_MS` | 300000 ms | Idade máxima aceita pelo `GNSSManager` |
+| `BatteryConfig::SPS30_WARMUP_MS` | 30000 ms | Estabilização do SPS30 |
+| `BatteryConfig::SPS30_READ_TIMEOUT_MS` | 5000 ms | Janela de tentativa de leitura de partículas |
+| `BatteryConfig::LIGHT_CONVERSION_MS` | 180 ms | Conversão única do BH1750 |
+| `BatteryConfig::MIN_SLEEP_MS` | 30000 ms | Repouso mínimo após a coleta em bateria |
+| `BatteryConfig::LED_PERIOD_MS` | 5000 ms | Período do indicador de bateria |
+| `BatteryConfig::LED_ON_MS` | 1000 ms | Tempo ligado do indicador de bateria |
+| `BatteryConfig::POWER_DEBOUNCE_MS` | 50 ms | Confirmação da transição de alimentação |
+
+Os parâmetros de hardware e temporização são definidos em compilação. Identidade, credenciais, servidor, nome e intervalo/revisão são configurados em execução e persistidos no NVS.
 
 <a id="leds"></a>
-## Configuração dos LEDs e pinagem
+## Sinalização por LEDs
 
-O brilho é definido em uma única função: [StatusLeds::write](src/led/status-leds.h). Edite estes valores de **0 a 255** e recompile:
+[StatusLeds](src/led/status-leds.h) centraliza o acionamento dos LEDs externos. `StatusLeds::write()` aplica PWM de 8 bits por `analogWrite()`.
 
 ```cpp
 constexpr uint8_t RED_BRIGHTNESS = 48;
 constexpr uint8_t BLUE_BRIGHTNESS = 20;
 ```
 
-A função usa `analogWrite` em todos os modos, inclusive no teste. O projeto considera LEDs de **cátodo comum**, cada anodo com resistor próprio. PWM controla corrente média, sem substituir o resistor.
+Cada constante define o duty cycle dos canais da respectiva cor, no intervalo de 0 a 255. O valor 0 desliga o canal e 255 representa duty cycle máximo. A configuração é compartilhada pelos modos normal, bateria e teste. O cache de duty cycle evita reconfigurar o LEDC quando o valor solicitado permanece igual.
 
-| Sinal | GPIO nos sources atuais | Função |
-| --- | --- | --- |
-| I2C SDA / SCL | 8 / 9 | AHT20, BMP280, BH1750, SPS30 |
-| GNSS RX / TX do ESP32 | 18 / 17 | TX do GPS → RX do ESP32; RX do GPS → TX do ESP32 |
-| POWER_SOURCE | 7 | HIGH: fonte; LOW: bateria |
-| LED1 vermelho / azul | 14 / 13 | Conexão BLE no normal |
-| LED2 vermelho / azul | 12 / 11 | Conexão Wi-Fi no normal |
-| LED3 vermelho / azul | 5 / 4 | Fonte no normal; pulso vermelho na bateria |
-| RGB interno | 48 | Apagado por quadro RGB preto |
-| GNSS_POWER_ENABLE | -1 | Controle físico opcional, desabilitado até escolher um GPIO livre |
-
-**Pinagem corrigida conforme a montagem informada:** vermelho e azul foram invertidos nos três LEDs, e os pares físicos da fonte e do Bluetooth foram trocados. Os nomes lógicos continuam sendo LED1 = Bluetooth, LED2 = Wi-Fi e LED3 = fonte; todas as rotinas usam essas constantes de `Pins`.
-
-| Modo | LED1 | LED2 | LED3 |
+| Modo | LED1: Bluetooth | LED2: Wi-Fi | LED3: alimentação |
 | --- | --- | --- | --- |
-| Normal | Azul se BLE conectado | Azul se Wi-Fi conectado | Azul |
-| Bateria | Apagado | Apagado | Vermelho por 1 s, apagado por 4 s |
-| Teste | Vermelho → azul → ambos | Vermelho → azul → ambos | Vermelho → azul → ambos |
+| Normal | Azul durante conexão BLE | Azul durante conexão Wi-Fi | Azul contínuo |
+| Bateria | Desligado | Desligado | Vermelho por 1 s em cada período de 5 s |
+| Teste | Vermelho, azul e ambos em sequência | Vermelho, azul e ambos em sequência | Vermelho, azul e ambos em sequência |
 
-<a id="bateria"></a>
-## Economia de bateria e limites físicos
+O RGB interno recebe um quadro preto na inicialização. Indicadores ligados diretamente à alimentação não são endereçáveis pelo firmware; seu estado depende do circuito elétrico. O controle por software inicia durante `setup()` e não abrange a etapa de boot/reset anterior à aplicação.
 
-O boot diretamente em LOW **não inicializa Wi-Fi, Bluetooth, SNTP nem a UART GNSS**. Ao sair do normal, a rotina encerra explicitamente BLE, Wi-Fi, reconexão automática, SNTP e UART antes de entrar em bateria. Uma requisição HTTP já iniciada pode terminar ou expirar antes dessa transição; novas requisições verificam a fonte.
+<a id="gnss"></a>
+## Aquisição GNSS e gerenciamento de localização
 
-| Componente | Comportamento em bateria |
+### Recepção
+
+[GNSSManager](src/sensors/gnss-manager.cpp) decodifica mensagens NMEA com TinyGPSPlus. A cada posição válida atualizada, mantém coordenadas, instante monotônico do fix e número sequencial. Altitude, satélites e HDOP são atualizados quando os respectivos campos estão disponíveis. A data/hora GNSS recente é convertida para epoch UTC.
+
+`getData()` retorna os dados armazenados e `hasFix()` verifica a idade da última posição. Com o valor padrão de `GNSS_MAX_FIX_AGE_MS`, um fix permanece válido por até 300 s sem atualização. O modo de teste apresenta também `lastFixAgeMs`, distinguindo uma posição armazenada de uma atualização recente.
+
+O diagnóstico periódico, a cada 60 s, informa a ausência de mensagens NMEA válidas recebidas ou a falta de posição válida.
+
+### Localização da estação
+
+[LocationManager](src/location/location-manager.cpp) aplica uma agenda de localização independente da frequência de aquisição ambiental.
+
+| Evento | Comportamento |
 | --- | --- |
-| ESP32-S3 | CPU a 80 MHz; light sleep entre tarefas com despertar por timer ou retorno da fonte |
-| Wi-Fi / BLE | Desligados, sem scan, publicidade, conexão ou envio |
-| GNSS | Sem recepção/consulta UART; alimentação cortada somente se houver EN/load switch configurado |
-| AHT20 | Conversão sob demanda; standby próprio entre leituras |
-| BMP280 | Sleep entre coletas; medição em modo forçado na coleta |
-| BH1750 | Power down; conversão única de alta resolução ao coletar |
-| SPS30 | Alimentação de 5 V mantida; stop → sleep entre coletas e wake → start antes de medir |
-| LEDs externos | Somente LED3 vermelho, 1 s a cada 5 s |
-| RGB do ESP32 | Apagado antes de executar qualquer rotina |
+| Inicialização | Abre uma busca, mesmo quando há localização persistida |
+| Busca bem-sucedida | Agenda a próxima obtenção para 24 h após o sucesso |
+| Busca sem sucesso | Timeout de 5 min e nova tentativa após 15 min |
+| Seleção de fix | Posição recebida após o início da busca, com idade máxima de 5 s |
+| Persistência | Coordenadas, identidade, horário de obtenção e pendência salvos no NVS |
+| Envio | `PATCH` de localização com retentativa em caso de falha |
 
-### Cuidado com o SPS30
+O horário de obtenção utiliza UTC do GNSS ou, quando disponível, o relógio sincronizado descontando a idade do fix. Posições de outra identidade não são reutilizadas. No modo de bateria, a posição persistida da identidade configurada é consultada sem recepção GNSS.
 
-Não cortamos seus 5 V e não usamos a amostra imediatamente após religar o ventilador. Cada ciclo acorda o sensor e aguarda **30 s de estabilização**, depois aguarda a conversão BH1750 e procura uma amostra nova do SPS30 por até mais **5 s**. Se não obtiver PM, salva os demais sensores e deixa PM/concentrações/tamanho como `null`, sem copiar uma leitura antiga. Confirme suporte a campos nulos no backend usado na sua bancada.
+### TIMEPULSE e alimentação do receptor
 
-A próxima coleta respeita o intervalo salvo, com pelo menos **30 s de repouso** após finalizar uma coleta. Portanto, na bateria intervalos muito curtos, como 30 s, são alongados para preservar estabilização e economia. O padrão de 5 min continua sendo aproximadamente 5 min entre inícios de ciclos. A primeira coleta começa ao entrar em bateria e é salva após a estabilização.
+A inicialização transmite `UBX-CFG-TP5` com o bit Active desativado e programa três repetições com espaçamento mínimo de 1 s. O comando solicita a desativação de TIMEPULSE; o firmware não verifica ACK desse comando. O efeito sobre um LED de fix depende de sua ligação ao sinal e do suporte do receptor.
 
-Os parâmetros estão em `BatteryConfig`, em [config.h](src/config/config.h). O fabricante recomenda pelo menos 30 s antes de usar a saída; uma média adicional de várias amostras aumenta repetibilidade, mas consome mais energia. Essa média adicional ainda não está implementada. Se o firmware do SPS30 não aceitar `sleep`, o driver registra a falha e mantém Idle após `stopMeasurement`, quando este foi confirmado. Falha em parar o sensor também é registrada e não é tratada como sucesso.
+`Pins::GNSS_POWER_ENABLE=-1` indica ausência de saída configurada para controle de alimentação. Com um GPIO configurado e circuito EN/load switch instalado, `PowerManager::gnssPower()` controla a alimentação segundo `GNSS_ENABLE_ACTIVE_HIGH`. Ao desativar o GNSS, os pinos UART são configurados como entradas. Sem comutação elétrica, encerrar a UART não interrompe a alimentação do receptor.
 
-Referências: [nota de baixo consumo da Sensirion, seções 2.1 e 2.2](https://sensirion.com/en/media/documents/188A2C3C/6166F165/Sensirion_Particulate_Matter_AppNotes_SPS30_Low_Power_Operation_D1.pdf) e [datasheet SPS30](https://sensirion.com/file/datasheet_sps30).
+<a id="comunicacao"></a>
+## Comunicação e formato dos dados
 
-### LEDs internos e desligamento real do GPS
+### Provisionamento BLE
 
-O RGB endereçável do ESP32 recebe um quadro preto. No início do GNSS, o firmware envia **UBX-CFG-TP5** com TIMEPULSE desativado, para apagar o LED de fix das placas que usam esse sinal. O comportamento depende da versão do receptor e da ligação do LED; confirme na bancada.
+O dispositivo anuncia `CASA-` seguido dos seis últimos caracteres do identificador de hardware. O serviço UART BLE utiliza característica RX para escrita e TX para notificações.
 
-**LEDs ligados diretamente ao VCC não têm controle por software.** Para garantir que nenhum LED da placa ESP32, GPS, UPS ou sensor permaneça aceso, retire/desconecte o LED ou seu resistor, ou interrompa sua alimentação por hardware. O firmware também não controla o instante anterior a `setup`, durante boot/reset.
+As mensagens são JSON UTF-8. O transporte aceita frames delimitados por quebra de linha e mensagens JSON completas sem delimitador. Respostas são enfileiradas e fragmentadas conforme o MTU após a inscrição do cliente nas notificações. A desconexão descarta respostas da sessão encerrada.
 
-Para garantir **GNSS realmente desligado na bateria**, instale um load switch/MOSFET adequado ou utilize EN, com estado elétrico padrão OFF. Configure um GPIO livre em `Pins::GNSS_POWER_ENABLE` e a polaridade `GNSS_ENABLE_ACTIVE_HIGH` em [power-manager.cpp](src/power/power-manager.cpp). Não alimente o GPS diretamente pelo GPIO e não use um pino já reservado. Com `GNSS_POWER_ENABLE=-1`, o código deixa de acessar o módulo, mas ele continua consumindo se o VCC permanecer ligado. Não é possível cumprir a condição física de todos os LEDs apagados apenas com o ZIP do firmware.
+| Comando | Campos de entrada | Resultado |
+| --- | --- | --- |
+| `get_status` | `command` | Estado de conexão, identidade, servidor, nome e intervalo |
+| `configure_wifi` | `ssid`, `password`, `server` | Persiste e aplica configuração de rede pela rotina normal |
+| `configure_interval` | `intervalSeconds` | Valida 30 a 86400 s, persiste e retorna confirmação |
+| `save_identity` | `deviceId`, `apiToken`; `stationName` opcional | Persiste identidade, credencial e nome |
+| `save_server` | `server` | Persiste URL de ingestão |
 
-O light sleep conserva a RAM e o relógio, permite acordar na volta da fonte e evita reinicializar os sensores a cada pulso. O LEDC que sustenta o `analogWrite` pára no light sleep desta configuração; por isso a CPU fica acordada a 80 MHz durante o pulso vermelho e dorme nos intervalos apagados. O consumo real depende dos reguladores, módulos, LEDs físicos e da montagem; a autonomia deve ser medida.
+`configure_interval` requer identidade e token configurados. As respostas de configuração só confirmam o intervalo após a persistência do estado.
 
-Referência GNSS: [u-blox 6 Receiver Description, CFG-TP5](https://content.u-blox.com/sites/default/files/products/documents/u-blox6_ReceiverDescrProtSpec_%28GPS.G6-SW-10018%29_Public.pdf).
+A autenticação HTTP utiliza a credencial da estação. O protocolo BLE de configuração não implementa autenticação de contas de usuário do aplicativo.
 
-<a id="armazenamento"></a>
-## Armazenamento e retorno da fonte
+### Integração HTTP
 
-- **UTC válido e identidade configurada:** a rotina de bateria salva em `/pending.jsonl`, a fila normal já existente. Quando a fonte retorna, Wi-Fi/BLE/GNSS voltam no normal; com rede e credencial válidas, a fila é reenviada preservando o horário original.
-- **Sem UTC ou sem identidade:** salva em `/undated.jsonl`, com `timestamp: null`, `boot_id`, `uptime_ms` e o motivo. Esses registros permanecem locais e **não são enviados automaticamente**, mesmo depois de acertar o relógio. Não é seguro inventar a data de uma coleta de um boot anterior. A exportação/reconciliação desse arquivo fica como etapa futura.
-- O NVS conserva cadastro, token, rede, intervalo e última posição. `clock.now()` consulta o relógio local; não inicia NTP na bateria. Após boot sem fonte, não há garantia de UTC até uma futura sincronização.
-- As filas compartilham o limite de **70% do LittleFS**. Ao esgotar o espaço, a fila que recebe a nova coleta tenta descartar suas medições mais antigas. Se o espaço estiver ocupado pela outra fila e não puder ser liberado, a coleta falha com log; a implementação não promete armazenamento ilimitado.
-- Os arquivos temporários são distintos (`/pending.tmp` e `/undated.tmp`) para preservar a recuperação de cada fila após interrupção de energia. A montagem inicial conserva o comportamento anterior de formatar se o LittleFS falhar; não faça testes de corrupção sem backup.
+O cliente inclui `Content-Type: application/json` e `Authorization: Bearer <token>`. Uma resposta HTTP 2xx é tratada como sucesso. Falha de transporte ou resposta fora dessa faixa mantém a necessidade de envio.
 
-Comandos BLE preservados: `get_status`, `configure_wifi`, `configure_interval`, `save_identity`, `save_server`. O protocolo de rádio não autentica contas de terceiros; a restrição administrativa do aplicativo não é uma autenticação implementada neste firmware.
+Para uma URL de ingestão terminada em `/api/measurements`, os endpoints derivados são:
 
-<a id="validacao"></a>
-## Validação e testes
+| Operação | Método | Caminho |
+| --- | --- | --- |
+| Envio de medição | POST | `/api/measurements` |
+| Atualização de localização | PATCH | `/api/devices/location` |
+| Consulta de configuração | GET | `/api/devices/config` |
+| Confirmação de configuração | POST | `/api/devices/config/report` |
 
-Verificado em **16/11/2026**: compilação completa `pio run` aprovada para ESP32-S3, com **54156 bytes de RAM (16,5%)** e **1224521 bytes de programa (36,6% da partição configurada)**. Os **sete testes de host passaram**. Não houve upload para uma placa física.
+Os timeouts configurados de conexão e leitura são de 3000 ms. A rotina normal consulta o intervalo remoto a cada 60 s. O estado confirmado contém revisão, intervalo, versão do firmware e origem da configuração.
 
-Para os testes sem placa, instale as dependências (`pio pkg install`) e execute com Bash e g++ (Linux, WSL ou equivalente):
+Intervalo e revisão são persistidos conjuntamente. Enquanto houver sobrescrita BLE pendente, revisões remotas anteriores ou iguais à revisão local não substituem o intervalo. Uma revisão remota posterior pode substituí-lo. O relatório de configuração confirmado pelo servidor encerra a marcação de sobrescrita quando intervalo e revisão ainda correspondem ao estado relatado.
+
+### Payload de medição
+
+A serialização é implementada em [json-builder.cpp](src/api/json-builder.cpp).
+
+| Campo | Conteúdo/unidade |
+| --- | --- |
+| `device_id` | Identificador da estação |
+| `timestamp` | Epoch UTC em segundos |
+| `latitude`, `longitude` | Graus decimais; `null` sem posição válida |
+| `pm` | Concentração mássica em µg/m³; chaves `1.0`, `2.5`, `4.0` e `10.0` |
+| `nc` | Concentração numérica em #/cm³; chaves `0.5`, `1.0`, `2.5`, `4.0` e `10.0` |
+| `typical_size` | Tamanho típico em µm |
+| `temperature` | Temperatura em °C |
+| `humidity` | Umidade relativa em % |
+| `pressure` | Pressão em hPa |
+| `light` | Iluminância em lx |
+
+Valores numéricos indisponíveis representados por NaN são serializados como `null`. A integração com o backend deve contemplar esses campos opcionais para o tratamento de aquisição parcial.
+
+<a id="persistencia"></a>
+## Persistência e recuperação de registros
+
+### Configuração e localização
+
+O NVS armazena identidade, token, rede, URL, nome, intervalo/revisão e localização da estação. O estado da configuração do intervalo inclui a origem BLE para aplicação das regras de precedência. A localização inclui seu horário de obtenção e estado de confirmação pelo servidor.
+
+### Filas LittleFS
+
+[PendingMeasurementStore](src/storage/pending-measurement-store.cpp) implementa armazenamento JSONL, com um registro por linha e arquivos temporários independentes.
+
+| Arquivo | Finalidade | Política de envio |
+| --- | --- | --- |
+| `/pending.jsonl` | Medições datadas e identificadas pendentes de envio | Reenvio pela rotina normal |
+| `/pending.tmp` | Compactação/recuperação da fila de envio | Não é enviado |
+| `/undated.jsonl` | Coletas de bateria sem UTC válido ou sem identidade | Exclusivamente local; sem promoção automática para envio |
+| `/undated.tmp` | Compactação/recuperação dos registros exclusivamente locais | Não é enviado |
+
+Em bateria, registros com UTC e identidade são gravados em `pending`. Os demais recebem `timestamp: null`, `boot_id`, `uptime_ms` e `reason` igual a `identity_missing` ou `clock_unavailable`. O estabelecimento posterior de UTC não altera automaticamente esses registros.
+
+A rotina normal tenta reenviar o primeiro registro de `pending` em intervalos de pelo menos 2000 ms, enquanto houver conexão. Um envio bem-sucedido remove esse registro; falhas mantêm a pendência. Os timestamps armazenados são preservados.
+
+A política de capacidade limita as gravações a 70% do volume LittleFS, considerando o uso compartilhado. A inclusão de um registro pode remover registros mais antigos da própria fila. Falhas de liberação de espaço, abertura, escrita ou cópia são propagadas por retorno de erro e log.
+
+Na recuperação, a presença da fila principal prevalece sobre seu temporário. Se a principal estiver ausente, o temporário é renomeado para recuperá-la. A montagem utiliza `LittleFS.begin(true)`: uma falha de montagem habilita tentativa de formatação do volume.
+
+### Horário
+
+`TimeManager` solicita NTP no modo normal e consulta o relógio local nas leituras de horário. O encerramento do SNTP preserva o RTC para a continuidade em light sleep. O boot sem sincronização não garante UTC válido; essas coletas permanecem na fila exclusivamente local.
+
+<a id="energia"></a>
+## Gerenciamento de energia
+
+| Componente | Operação normal | Operação em bateria |
+| --- | --- | --- |
+| CPU | Frequência registrada na inicialização | 80 MHz |
+| Wi-Fi | Conexão e reconexão | Desligado |
+| BLE | Provisionamento e notificações | Pilha encerrada |
+| GNSS | UART ativa | UART encerrada; alimentação condicionada ao hardware EN |
+| AHT20 | Conversão por solicitação de leitura | Conversão por solicitação de leitura e standby do sensor |
+| BMP280 | Modo normal | Modo forçado durante a leitura e sleep entre coletas |
+| BH1750 | Medição contínua | Conversão única e power down |
+| SPS30 | Medição contínua | Estabilização, leitura, stop e sleep |
+| SNTP | Sincronização e acompanhamento | Cliente encerrado; consulta ao RTC local |
+| LEDs externos | Sinalização de conexão e fonte | Indicador vermelho da fonte |
+
+O SPS30 mantém a alimentação de 5 V durante a operação. O driver executa a sequência wake/start antes da aquisição e stop/sleep após a coleta. Se `sleep` não for aceito e a parada tiver sido confirmada, o sensor permanece em Idle. Falhas ao parar ou iniciar a medição são registradas.
+
+A estabilização padrão do SPS30 é de 30 s e a coleta utiliza uma amostra após essa janela, sem média temporal adicional. Os modos de operação e os tempos de estabilização são descritos na [documentação de baixo consumo da Sensirion](https://sensirion.com/en/media/documents/188A2C3C/6166F165/Sensirion_Particulate_Matter_AppNotes_SPS30_Low_Power_Operation_D1.pdf).
+
+O ESP32 entra em light sleep nos intervalos disponíveis entre tarefas quando o LED da fonte está apagado. O despertar é configurado por timer e por HIGH em GPIO7 via EXT0. Após o despertar, GPIO7 retorna do mux RTC ao uso digital.
+
+Durante o pulso vermelho, a CPU permanece ativa a 80 MHz para sustentar o PWM do LEDC. A duração do repouso é limitada pelo próximo evento de LED ou aquisição. Light sleep preserva RAM e relógio, sem reinicializar a aplicação.
+
+Na transição para bateria, a rotina normal encerra BLE, reconexão Wi-Fi, SNTP e UART. Uma operação HTTP iniciada antes da alteração de alimentação pode concluir ou expirar antes do encerramento. O tempo de debounce não representa uma garantia de latência máxima da transição.
+
+O desligamento elétrico de módulos e indicadores ligados ao VCC depende de EN/load switch ou do circuito de alimentação. A autonomia é uma propriedade do conjunto de hardware, temporização, periféricos e bateria; o firmware não calcula estimativa de carga restante.
+
+<a id="testes"></a>
+## Compilação e testes
+
+### Compilação do firmware
 
 ```bash
+pio run -e esp32-s3-devkitm-1
+```
+
+### Testes de host
+
+Requerem Bash, compilador g++ e dependências instaladas pelo PlatformIO.
+
+```bash
+pio pkg install
 bash scripts/run-host-tests.sh
 ```
 
-O runner inclui os testes antigos de localização, persistência, intervalo e BLE e os novos testes do controlador/bateria e do driver SPS30. Eles simulam hardware; não medem corrente, fidelidade do aerossol ou o estado elétrico de LEDs alimentados diretamente.
+| Teste | Escopo |
+| --- | --- |
+| `routine_power_test.cpp` | Seleção de modo, debounce, transições, agendamento de bateria, timeout e PWM |
+| `local_queues_test.cpp` | Filas independentes, temporários, capacidade compartilhada e falhas de escrita |
+| `sps30_power_test.cpp` | Sequência de comandos, repouso, retomada e falhas de leitura |
+| `location_schedule_test.cpp` | Agenda, timeout, retentativa, UTC e uptime prolongado |
+| `location_manager_test.cpp` | Persistência de posição, identidade, horário e retentativa de envio |
+| `measurement_configuration_test.cpp` | Limites, revisões, persistência e precedência BLE/remota |
+| `ble_transport_test.cpp` | Fragmentação, MTU, inscrição, falhas de notificação e encerramento/reabertura |
 
-Na bancada, valide esta sequência antes de integrar na `main`:
+O runner compila os testes com C++11, `-Wall`, `-Wextra` e `-Werror`. Os adaptadores de host substituem interfaces de hardware e não integram o firmware.
 
-1. Grave com `TEST_MODE=true` e confirme sensores, pinagem, polaridade e intensidade dos LEDs externos. Observe o RGB interno e o LED de fix GNSS.
-2. Grave com `TEST_MODE=false`, ligue com HIGH e confirme provisionamento, NTP e envio normal.
-3. Mude para LOW e confirme desligamento de Wi-Fi/BLE, ausência de UART GNSS e somente o pisca da fonte. Com EN instalado, meça também a alimentação do GPS.
-4. Aguarde a estabilização e uma coleta em bateria. Confira a fila e depois volte para HIGH para verificar reenvio com o timestamp original.
-5. Faça boot em LOW sem horário válido. A coleta deve ir para `undated`, sem conexões e sem uma data de 1970 enviada ao servidor.
-6. Repita as trocas durante a estabilização do SPS30, durante perda de rede e com sensor ausente. Uma coleta incompleta é cancelada quando retorna ao normal.
-7. Meça corrente em cada fase e compare a resposta do SPS30 com leitura contínua antes de concluir a autonomia.
+O workflow [firmware.yml](.github/workflows/firmware.yml) executa a compilação e os testes em pull requests e nos pushes das branches configuradas. A validação física abrange integridade elétrica, resposta dos sensores, recepção GNSS, consumo e retenção de dados; essas propriedades não são verificadas pelos adaptadores de host.
 
 <a id="changelog"></a>
-## Atualizações e changelog
+## Changelog
 
-Registre cada mudança aqui com data, versão, comportamento e validação. Alterações novas entram no topo.
+| Versão | Comportamento documentado |
+| --- | --- |
+| `1.4.0-dev` | Controle de rotinas por modo de teste e alimentação; aquisição local em bateria, gerenciamento de repouso dos sensores, PWM dos LEDs e pinagem de Bluetooth/Wi-Fi/fonte |
+| `1.3.1` | Transporte BLE com fila de respostas, fragmentos imutáveis e controle de notificações por conexão |
+| `1.3.0` | Configuração persistida do intervalo por BLE e enquadramento JSON por linhas |
+| `1.2.0` | Consulta remota do intervalo de aquisição e confirmação de revisão persistida |
 
-### Correção da pinagem dos LEDs — 16/11/2026
-
-- Invertidos os pinos RED e BLUE dos três LEDs bicolores.
-- Trocados os pares físicos usados para Bluetooth e fonte, mantendo LED1 = Bluetooth, LED2 = Wi-Fi e LED3 = fonte.
-- Mapa corrigido (vermelho/azul): Bluetooth GPIO14/GPIO13; Wi-Fi GPIO12/GPIO11; fonte GPIO5/GPIO4.
-- Atualizada a tabela de pinagem; o PWM e as rotinas de sinalização continuam centralizados em StatusLeds.
-
-### 1.4.0-dev — 16/11/2026
-
-- Criada a branch `development` a partir da `main` correspondente aos sources do projeto.
-- `main` reduzida ao controlador; rotinas normal, bateria e teste separadas.
-- Seleção por `TEST_MODE` e `POWER_SOURCE`, com acompanhamento da fonte e debounce.
-- Bateria sem acesso de medição/rede a Wi-Fi, BLE ou GNSS, com CPU a 80 MHz, light sleep e armazenamento local.
-- BMP280 forçado/sleep, BH1750 one-shot/power down, SPS30 com sleep e estabilização de 30 s sem cortar os 5 V.
-- Registros sem horário/identidade separados da fila de envio; amostra PM indisponível não vira zero ou dado antigo.
-- LEDs externos com PWM e intensidades independentes por cor; na bateria somente a fonte pisca vermelho por 1 s a cada 5 s.
-- RGB interno apagado, pedido para desabilitar TIMEPULSE GNSS e controle opcional da alimentação do módulo, com limites físicos documentados.
-- README reorganizado com índice de arquivos, instalação, árvore de execução, parâmetros e descrição dos módulos.
-- Plataforma fixada em 6.12.0, porta de upload automática e testes de rotinas/SPS30 adicionados à integração contínua.
-- Compilação ESP32-S3 e sete testes de host aprovados em 16/11/2026. Validação física, consumo e autonomia ainda pendentes na bancada.
-
-### 1.3.1 — versão de origem
-
-Respostas BLE passaram a usar fila e fragmentos imutáveis, enviados após inscrição nas notificações, com tentativas de recuperação e descarte da sessão antiga ao desconectar. Preserva cadastro, token e filas existentes.
-
-### 1.3.0 — versão anterior
-
-Configuração do intervalo por BLE, persistência da origem local e relatório posterior à API. Identificação estável no anúncio e enquadramento de JSON por linhas, mantendo compatibilidade com JSON completo legado.
-
-### 1.2.0 — versão anterior
-
-Consulta autenticada do intervalo remoto, persistência conjunta de intervalo/revisão e confirmação ao servidor, preservando os timestamps das medições offline.
 
 <a id="arquivos"></a>
-## Descrição de cada arquivo
+## Referência dos arquivos
 
-Headers `.h` declaram interfaces/estruturas; arquivos `.cpp` implementam o comportamento. Arquivos em `test/*-host` e `test/host` são adaptadores exclusivos do computador e não entram no firmware.
+Os headers `.h` definem interfaces e estruturas; os arquivos `.cpp` contêm as implementações. Os diretórios `test/host`, `test/ble-host`, `test/runtime-host`, `test/sensor-host` e `test/storage-host` fornecem adaptadores exclusivos dos testes de host.
 
 ### Raiz, configuração e automação
 
 | Arquivo | Funcionamento |
 | --- | --- |
-| [.github/workflows/firmware.yml](.github/workflows/firmware.yml) | Compila o firmware e roda os testes C++ em pushes para main/development e em pull requests. Não grava placas e não faz deploy do firmware. |
+| [.github/workflows/firmware.yml](.github/workflows/firmware.yml) | Executa a compilação PlatformIO e os testes C++ de host em pull requests e nos pushes das branches configuradas. |
 | [.gitignore](.gitignore) | Exclui saídas do PlatformIO e arquivos locais de editor do versionamento. |
-| [.vscode/extensions.json](.vscode/extensions.json) | Permite ao VS Code sugerir as extensões usadas pelo projeto. |
+| [.vscode/extensions.json](.vscode/extensions.json) | Declara as extensões recomendadas para desenvolvimento no VS Code. |
 | [README.md](README.md) | Ponto de entrada da documentação: instalação, seleção de rotinas, alimentação, changelog e referências de todos os arquivos. |
-| [include/README](include/README) | Explica a pasta include padrão do PlatformIO; atualmente os headers do firmware ficam ao lado de suas implementações em src. |
-| [lib/README](lib/README) | Explica a organização de bibliotecas privadas. As dependências atuais são declaradas em platformio.ini. |
-| [platformio.ini](platformio.ini) | Define ESP32-S3 DevKitM-1, Arduino, monitor a 19200 baud e bibliotecas. A plataforma fica fixada em 6.12.0 para evitar mudanças implícitas de framework. A porta de upload é autodetectada. |
-| [scripts/run-host-tests.sh](scripts/run-host-tests.sh) | Compila e roda os testes de rotinas, alimentação, SPS30, localização, configuração e BLE. Usa um diretório temporário para os executáveis; exige g++ e as dependências de pio pkg install. |
+| [include/README](include/README) | Documenta a pasta de inclusão global do PlatformIO. As interfaces do firmware são organizadas nos subdiretórios de src. |
+| [lib/README](lib/README) | Documenta a estrutura de bibliotecas privadas do PlatformIO. As dependências externas são declaradas em platformio.ini. |
+| [platformio.ini](platformio.ini) | Define o ambiente esp32-s3-devkitm-1, plataforma espressif32 6.12.0, framework Arduino, dependências e monitor serial a 19200 bit/s. A seleção da porta de upload é automática. |
+| [scripts/run-host-tests.sh](scripts/run-host-tests.sh) | Compila e executa sete testes C++ de rotinas, filas, SPS30, agenda GNSS, localização, configuração e BLE. Os binários são gerados em diretório temporário e removidos após a execução. |
 
 ### Controle de rotinas, estação e energia
 
@@ -348,11 +551,11 @@ Headers `.h` declaram interfaces/estruturas; arquivos `.cpp` implementam o compo
 | [src/power/power-manager.h](src/power/power-manager.h) | Expõe leitura da fonte, controle opcional da alimentação GNSS, LED RGB, frequência de CPU e light sleep. |
 | [src/routines/battery-routine.cpp](src/routines/battery-routine.cpp) | Acorda o SPS30, aguarda a estabilização, prepara a conversão de luz e salva a coleta no LittleFS. Não chama Wi-Fi, BLE, NTP ou leitura GNSS. Intercala tarefas com light sleep e atualiza somente o LED vermelho da fonte. |
 | [src/routines/battery-routine.h](src/routines/battery-routine.h) | Declara a máquina de estados: repouso, estabilização do SPS30 e leitura. Usa prazos monotônicos de 64 bits. |
-| [src/routines/normal-routine.cpp](src/routines/normal-routine.cpp) | Recebe a lógica que estava na main: GNSS, BLE, Wi-Fi, NTP, localização, configuração remota, medições e reenvio. end encerra rádios, SNTP e UART para a bateria. O NTP passa a ser acompanhado no loop. |
+| [src/routines/normal-routine.cpp](src/routines/normal-routine.cpp) | Executa recepção GNSS, transporte BLE, rede Wi-Fi, sincronização NTP, localização, configuração remota, aquisição e reenvio. end encerra BLE, Wi-Fi, SNTP e UART para a transição ao modo de bateria. |
 | [src/routines/normal-routine.h](src/routines/normal-routine.h) | Agrupa WiFiManager, BLEManager, ProtocolHandler e StationHttpClient e os tempos de aquisição, reenvio e consulta de configuração. |
-| [src/routines/routine-controller.cpp](src/routines/routine-controller.cpp) | Prioriza TEST_MODE. Fora dele, inicializa os recursos locais uma única vez e seleciona a rotina pelo GPIO POWER_SOURCE. Observa também mudanças durante a execução e confirma a fonte por 50 ms antes de trocar. |
+| [src/routines/routine-controller.cpp](src/routines/routine-controller.cpp) | Inicializa a infraestrutura local e seleciona o modo de execução. TEST_MODE tem prioridade; fora do teste, o nível de POWER_SOURCE determina a rotina após debounce de 50 ms. |
 | [src/routines/routine-controller.h](src/routines/routine-controller.h) | Declara os três modos, os recursos locais e as duas rotinas; mantém o estado da fonte e o tempo de debounce. |
-| [src/station/station-context.cpp](src/station/station-context.cpp) | Inicializa uma vez os serviços locais e constrói StationData. Em bateria usa somente o RTC e uma localização já armazenada da mesma identidade. Se faltar UTC ou identificação, grava um registro separado com boot_id e uptime_ms. |
+| [src/station/station-context.cpp](src/station/station-context.cpp) | Inicializa os serviços locais, constrói StationData e encaminha a persistência. Utiliza o RTC e a localização associada à identidade configurada; registros sem UTC ou identificação recebem metadados de boot e uptime. |
 | [src/station/station-context.h](src/station/station-context.h) | Reúne configurações NVS, sensores, relógio, posição armazenada e as filas pending/undated. Nenhum rádio é inicializado por este contexto. |
 | [src/station/station-data.h](src/station/station-data.h) | Agrupa identidade, nome, horário, posição válida/opcional e SensorData antes de gerar o JSON. |
 
@@ -361,7 +564,7 @@ Headers `.h` declaram interfaces/estruturas; arquivos `.cpp` implementam o compo
 | Arquivo | Funcionamento |
 | --- | --- |
 | [src/config/config.h](src/config/config.h) | Centraliza versão, I2C, UART GNSS, POWER_SOURCE, LEDs e EN opcional do GPS. BatteryConfig reúne estabilização, timeout, repouso mínimo, conversão de luz, debounce e duração do pisca. |
-| [src/config/settings-manager.cpp](src/config/settings-manager.cpp) | Salva os parâmetros e mantém intervalo, revisão e origem BLE juntos. Protege a alteração do intervalo com mutex e evita que uma revisão remota antiga desfaça a configuração local. |
+| [src/config/settings-manager.cpp](src/config/settings-manager.cpp) | Persiste configurações no NVS. Intervalo, revisão e origem BLE são gravados como um estado conjunto, com mutex e regras de precedência entre configuração local e revisão remota. |
 | [src/config/settings-manager.h](src/config/settings-manager.h) | Declara acesso a identidade, token, rede, servidor, nome e intervalo/revisão. A declaração legada HttpClient ao final não participa da rotina atual. |
 | [src/device/device-identity.cpp](src/device/device-identity.cpp) | Obtém o ID a partir do hardware do ESP32; independe da identidade de cadastro fornecida pelo backend. |
 | [src/device/device-identity.h](src/device/device-identity.h) | Declara o identificador estável usado para distinguir estações. |
@@ -376,8 +579,8 @@ Headers `.h` declaram interfaces/estruturas; arquivos `.cpp` implementam o compo
 | [src/sensors/bh1750.h](src/sensors/bh1750.h) | Declara leitura contínua, conversão única e power down do BH1750. |
 | [src/sensors/gnss-manager.cpp](src/sensors/gnss-manager.cpp) | Decodifica NMEA com TinyGPSPlus e obtém data UTC do GPS. No begin envia UBX-CFG-TP5 com timepulse desabilitado; end encerra a UART. Não é inicializado na partida em bateria e não é atualizado nessa rotina. |
 | [src/sensors/gnss-manager.h](src/sensors/gnss-manager.h) | Declara posição, idade do fix, satélites, HDOP, sequência e data UTC. Oferece begin/update/end da UART. |
-| [src/sensors/sensor-data.h](src/sensors/sensor-data.h) | Define temperatura, umidade, pressão, luz, PM, concentração numérica e tamanho típico. Um valor ainda indisponível começa como NaN e é serializado como null, evitando confundir falha com zero medido. |
-| [src/sensors/sensor-manager.cpp](src/sensors/sensor-manager.cpp) | Inicia e inspeciona o I2C. Na bateria mantém o BMP280 em repouso, prepara o SPS30 e uma conversão de luz, aguarda dado novo de PM e permite salvar os outros sensores após o timeout. |
+| [src/sensors/sensor-data.h](src/sensors/sensor-data.h) | Define os campos ambientais de temperatura, umidade, pressão, iluminância, PM, concentração numérica e tamanho típico. Campos indisponíveis são inicializados com NaN e serializados como null. |
+| [src/sensors/sensor-manager.cpp](src/sensors/sensor-manager.cpp) | Inicializa o I2C a 100 kHz e coordena os drivers. No modo de bateria prepara o SPS30 e a conversão de luz, solicita leitura de partículas e captura os demais sensores ao obter dados ou atingir o timeout. |
 | [src/sensors/sensor-manager.h](src/sensors/sensor-manager.h) | Oferece leitura normal e preparação, captura e suspensão de uma coleta em bateria. A mesma camada de sensores é compartilhada pelas rotinas. |
 | [src/sensors/sps30.cpp](src/sensors/sps30.cpp) | Usa wakeUpSequence, startMeasurement, stopMeasurement e sleep, sem desligar os 5 V. Verifica data-ready e propaga falhas. Se o firmware não aceitar sleep, deixa o sensor em Idle, com ventilador e laser parados quando stop foi confirmado. |
 | [src/sensors/sps30.h](src/sensors/sps30.h) | Controla estados de medição e sleep e expõe leitura com indicação de sucesso. Não apresenta uma amostra anterior como se fosse nova. |
@@ -389,7 +592,7 @@ Headers `.h` declaram interfaces/estruturas; arquivos `.cpp` implementam o compo
 | [src/location/location-manager.cpp](src/location/location-manager.cpp) | Aceita fix novo e recente na inicialização e a cada 24 h; busca por até 5 min e repete após 15 min se falhar. Salva posição e pendência no NVS antes de enviá-las. É atualizado somente na rotina normal. |
 | [src/location/location-manager.h](src/location/location-manager.h) | Declara localização persistida, agenda e estado de envio. belongsTo permite reutilizar uma posição apenas para a identidade que a obteve. |
 | [src/location/location-schedule.h](src/location/location-schedule.h) | Implementa busca inicial, timeout, retentativa e período diário, sem depender de ajustes de NTP ou de millis de 32 bits. |
-| [src/time/time-manager.cpp](src/time/time-manager.cpp) | Solicita NTP e acompanha o relógio no normal. end pára SNTP sem apagar o horário do RTC. now/isSynchronized não fazem acesso à rede e podem ser usados em bateria. |
+| [src/time/time-manager.cpp](src/time/time-manager.cpp) | Inicializa e acompanha a sincronização NTP no modo normal. end interrompe SNTP e preserva o relógio do sistema. now e isSynchronized consultam o estado local sem iniciar acesso à rede. |
 | [src/time/time-manager.h](src/time/time-manager.h) | Separa início/parada do SNTP de consultas ao RTC e verificação de UTC válido. |
 | [src/time/utc-epoch.h](src/time/utc-epoch.h) | Converte campos de calendário em epoch sem depender do fuso horário local do ambiente. |
 
@@ -401,28 +604,28 @@ Headers `.h` declaram interfaces/estruturas; arquivos `.cpp` implementam o compo
 | [src/api/json-builder.cpp](src/api/json-builder.cpp) | Monta device_id, timestamp, posição opcional, PM, concentrações numéricas, tamanho típico, luz, temperatura, umidade e pressão. |
 | [src/api/json-builder.h](src/api/json-builder.h) | Declara a criação do payload JSON a partir de StationData. |
 | [src/bluetooth/ble-callbacks.h](src/bluetooth/ble-callbacks.h) | Encaminha conexão, desconexão, escrita e inscrição de notificações ao BLEManager; não contém a rotina principal da estação. |
-| [src/bluetooth/ble-manager.cpp](src/bluetooth/ble-manager.cpp) | Anuncia CASA mais o sufixo do hardware ID, recebe JSON completo ou por linhas e envia respostas em fragmentos imutáveis após inscrição nas notificações. end encerra a pilha e limpa a sessão; um próximo begin pode reativá-la. |
+| [src/bluetooth/ble-manager.cpp](src/bluetooth/ble-manager.cpp) | Gerencia anúncio CASA-<sufixo do hardware ID>, recepção JSON e notificações fragmentadas por conexão. O envio depende de inscrição do cliente; end encerra a pilha, limpa a sessão e libera os objetos NimBLE. |
 | [src/bluetooth/ble-manager.h](src/bluetooth/ble-manager.h) | Declara callbacks, estado de conexão, fila de respostas, mutex e controle de início/encerramento. |
 | [src/bluetooth/ble-uuid.h](src/bluetooth/ble-uuid.h) | Centraliza os UUIDs do serviço UART e das características RX/TX usadas pelo aplicativo. |
-| [src/network/station-http-client.cpp](src/network/station-http-client.cpp) | Usa Bearer token e as rotas do servidor configurado. Impede uma nova requisição sem fonte externa e limita timeouts de conexão/leitura a 3 s. Uma requisição já em execução termina ou expira antes da troca de rotina. |
+| [src/network/station-http-client.cpp](src/network/station-http-client.cpp) | Executa requisições HTTP com Bearer token. Verifica fonte externa e conexão Wi-Fi, deriva as rotas auxiliares da URL de ingestão e configura timeout de conexão e leitura de 3000 ms. |
 | [src/network/station-http-client.h](src/network/station-http-client.h) | Oferece envio de medições, posição e leitura/confirmação de configuração usando SettingsManager. |
 | [src/network/wifi-manager.cpp](src/network/wifi-manager.cpp) | Mantém retentativas com espera crescente. As esperas observam a fonte; end desliga Wi-Fi e a reconexão automática sem apagar o cadastro salvo. |
 | [src/network/wifi-manager.h](src/network/wifi-manager.h) | Declara conexão, nova configuração, reconexão e encerramento explícito. |
-| [src/protocol/protocol-handler.cpp](src/protocol/protocol-handler.cpp) | Trata get_status, configure_wifi, configure_interval, save_identity e save_server, valida os campos e monta respostas. A conexão Wi-Fi é aplicada depois no loop, fora do callback de escrita. |
+| [src/protocol/protocol-handler.cpp](src/protocol/protocol-handler.cpp) | Valida e processa get_status, configure_wifi, configure_interval, save_identity e save_server. A conexão Wi-Fi é aplicada pela rotina normal a partir de uma configuração pendente. |
 | [src/protocol/protocol-handler.h](src/protocol/protocol-handler.h) | Liga transporte, rede e configurações e declara o estado de uma configuração Wi-Fi pendente. |
 
 ### Armazenamento
 
 | Arquivo | Funcionamento |
 | --- | --- |
-| [src/storage/pending-measurement-store.cpp](src/storage/pending-measurement-store.cpp) | Grava uma medição por linha, recupera operações interrompidas e remove a mais antiga quando precisa liberar sua fila. Verifica o limite de 70% do filesystem compartilhado, o tamanho do registro e a escrita completa. |
+| [src/storage/pending-measurement-store.cpp](src/storage/pending-measurement-store.cpp) | Implementa filas JSONL no LittleFS, recuperação de arquivos temporários, consulta e remoção do primeiro registro. Aplica limite compartilhado de 70% do volume e verifica o tamanho das escritas e das cópias. |
 | [src/storage/pending-measurement-store.h](src/storage/pending-measurement-store.h) | Oferece begin/enqueue/peek/removeFirst/count. O construtor aceita caminhos distintos, permitindo duas filas sem misturar arquivos temporários. |
 
 ### Testes e adaptadores
 
 | Arquivo | Funcionamento |
 | --- | --- |
-| [test/README](test/README) | Explica os testes executáveis sem placa e as validações adicionais necessárias na bancada. |
+| [test/README](test/README) | Documenta os pré-requisitos dos testes de host, o runner e o escopo dos adaptadores de hardware. |
 | [test/ble-host/Arduino.h](test/ble-host/Arduino.h) | Adaptador de Arduino.h usado somente no host para simular Arduino, identificação do hardware ou a API NimBLE. Não é incluído no firmware. |
 | [test/ble-host/NimBLEDevice.h](test/ble-host/NimBLEDevice.h) | Adaptador de NimBLEDevice.h usado somente no host para simular Arduino, identificação do hardware ou a API NimBLE. Não é incluído no firmware. |
 | [test/ble-host/device/device-identity.h](test/ble-host/device/device-identity.h) | Adaptador de device-identity.h usado somente no host para simular Arduino, identificação do hardware ou a API NimBLE. Não é incluído no firmware. |
@@ -450,5 +653,5 @@ Headers `.h` declaram interfaces/estruturas; arquivos `.cpp` implementam o compo
 | [test/sensor-host/SensirionI2cSps30.h](test/sensor-host/SensirionI2cSps30.h) | Adaptador de SensirionI2cSps30.h exclusivo dos testes: registra comandos e permite injetar erros e amostras. |
 | [test/sensor-host/Wire.h](test/sensor-host/Wire.h) | Adaptador de Wire.h exclusivo dos testes: oferece a interface mínima de Arduino/I2C sem placa física. |
 | [test/sps30_power_test.cpp](test/sps30_power_test.cpp) | Executa o driver real com uma interface Sensirion simulada: ordem stop/sleep/wake/start, sleep não suportado, ausência de amostra nova e falhas de leitura/comando. |
-| [test/storage-host/Arduino.h](test/storage-host/Arduino.h) | Adaptador de Arduino.h exclusivo do host: simula arquivos e permite injetar falha de montagem ou escrita parcial, sem alterar arquivos da estação. |
-| [test/storage-host/LittleFS.h](test/storage-host/LittleFS.h) | Adaptador de LittleFS.h exclusivo do host: simula arquivos e permite injetar falha de montagem ou escrita parcial, sem alterar arquivos da estação. |
+| [test/storage-host/Arduino.h](test/storage-host/Arduino.h) | Fornece substitutos de String e Serial para os testes de persistência no host. |
+| [test/storage-host/LittleFS.h](test/storage-host/LittleFS.h) | Simula o filesystem LittleFS, operações de arquivo, capacidade de armazenamento e falhas de montagem ou escrita parcial. |
