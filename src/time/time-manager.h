@@ -7,6 +7,7 @@ class TimeManager
 {
 public:
     void begin();
+    void end();
 
     bool waitForSynchronization(
         unsigned long timeoutMs = 10000

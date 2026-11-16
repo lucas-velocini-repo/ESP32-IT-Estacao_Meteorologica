@@ -2,6 +2,7 @@
 
 #include <WiFi.h>
 #include <time.h>
+#include <esp_sntp.h>
 
 namespace
 {
@@ -156,4 +157,9 @@ int64_t TimeManager::now() const
     return static_cast<int64_t>(
         currentTime
     );
+}
+void TimeManager::end()
+{
+    // Mantém o RTC e interrompe o cliente de rede durante a bateria.
+    sntp_stop();
 }

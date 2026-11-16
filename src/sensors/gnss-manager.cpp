@@ -21,6 +21,10 @@ void GNSSManager::begin(
         txPin
     );
 
+    disableTimepulse();
+    timepulseRetries = 3;
+    lastTimepulseConfig = millis();
+
     Serial.println();
 
     Serial.println(
@@ -52,6 +56,15 @@ void GNSSManager::update()
     if(serial == nullptr)
     {
         return;
+    }
+
+    // O primeiro comando pode chegar durante o boot do módulo. Repete sem
+    // bloquear o loop; nunca é executado na rotina de bateria.
+    if (timepulseRetries && millis() - lastTimepulseConfig >= 1000)
+    {
+        disableTimepulse();
+        lastTimepulseConfig = millis();
+        --timepulseRetries;
     }
 
 
@@ -236,4 +249,32 @@ GNSSData GNSSManager::getData() const
 
 
     return data;
+}
+
+void GNSSManager::end()
+{
+    if (serial != nullptr) serial->end();
+    serial = nullptr;
+    fixValid = false;
+}
+
+void GNSSManager::disableTimepulse()
+{
+    // UBX-CFG-TP5, TP0: flags Active=0 desabilita o LED ligado ao TIMEPULSE.
+    // Não controla LEDs de alimentação soldados diretamente ao VCC.
+    uint8_t packet[40] = {0xB5, 0x62, 0x06, 0x31, 0x20, 0x00};
+    packet[14] = 0x40; packet[15] = 0x42; packet[16] = 0x0F; // período 1 s
+    packet[18] = 0x40; packet[19] = 0x42; packet[20] = 0x0F;
+    uint8_t ckA = 0, ckB = 0;
+    for (size_t i = 2; i < sizeof(packet) - 2; ++i)
+    {
+        ckA += packet[i];
+        ckB += ckA;
+    }
+    packet[38] = ckA;
+    packet[39] = ckB;
+    serial->write(packet, sizeof(packet));
+    serial->flush();
+
+
 }

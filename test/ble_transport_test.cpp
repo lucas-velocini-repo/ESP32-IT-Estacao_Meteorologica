@@ -82,5 +82,14 @@ int main() {
     assert(received() == "{\"type\":\"next\"}\n");
     disconnect(2);
     assert(!ble.isConnected());
+    // A troca para bateria encerra o transporte e permite um próximo begin().
+    ble.end();
+    assert(!ble.isConnected());
+    ble.end(); // idempotente
+    packets.clear();
+    ble.begin(); connect(3); subscribe(3);
+    ble.send("{\"type\":\"restored\"}"); pump(ble);
+    assert(received()=="{\"type\":\"restored\"}\n");
+    ble.end();
     std::cout << "BLE immutable fragments, subscription race, MTU, retry and reconnect checks passed\n";
 }

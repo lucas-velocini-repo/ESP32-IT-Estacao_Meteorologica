@@ -8,6 +8,8 @@
 
 void BLEManager::begin()
 {
+    if (running) return;
+    running = true;
     Serial.println("Inicializando BLE...");
 
     const String hardwareId = DeviceIdentity::getHardwareId();
@@ -99,7 +101,7 @@ void BLEManager::handleDisconnect(uint16_t handle)
 
     Serial.println("BLE desconectado.");
 
-    NimBLEDevice::startAdvertising();
+    if (running) NimBLEDevice::startAdvertising();
 }
 
 void BLEManager::handleSubscribe(uint16_t handle, uint16_t subscription)
@@ -195,4 +197,22 @@ void BLEManager::send(const std::string& message)
         return;
     }
     responses.emplace_back(++nextResponseId, std::move(frame));
+}
+
+void BLEManager::end()
+{
+    if (!running) return;
+    running = false; // Um callback de desconexão não deve reabrir advertising.
+    // Nunca mantém o mutex enquanto a pilha encerra seus callbacks.
+    NimBLEDevice::deinit(true);
+    std::lock_guard<std::mutex> lock(transmitMutex);
+    connected = false;
+    notificationsEnabled = false;
+    connectionHandle = BLE_HS_CONN_HANDLE_NONE;
+    responses.clear();
+    incoming.clear();
+    server = nullptr;
+    service = nullptr;
+    rx = nullptr;
+    tx = nullptr;
 }

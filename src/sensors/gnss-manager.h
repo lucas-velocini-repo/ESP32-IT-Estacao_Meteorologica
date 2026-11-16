@@ -35,6 +35,7 @@ public:
     );
 
     void update();
+    void end();
 
     GNSSData getData() const;
 
@@ -42,6 +43,9 @@ public:
 
 
 private:
+    void disableTimepulse();
+    uint8_t timepulseRetries = 0;
+    unsigned long lastTimepulseConfig = 0;
 
     HardwareSerial* serial =
         nullptr;

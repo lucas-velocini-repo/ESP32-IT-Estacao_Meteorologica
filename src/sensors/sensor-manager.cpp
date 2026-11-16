@@ -56,7 +56,8 @@ void scanI2CBus()
 
 void SensorManager::begin(
     int sdaPin,
-    int sclPin
+    int sclPin,
+    bool battery
 )
 {
     Serial.println();
@@ -85,9 +86,11 @@ void SensorManager::begin(
 
     scanI2CBus();
 
+    batteryMode = battery;
     climate.begin();
-    light.begin();
-    particulate.begin();
+    climate.setBatteryMode(battery);
+    light.begin(battery);
+    particulate.begin(battery);
 }
 
 SensorData SensorManager::read()
@@ -101,3 +104,39 @@ SensorData SensorManager::read()
     return data;
 }
 
+
+void SensorManager::setBatteryMode(bool enabled)
+{
+    if (batteryMode == enabled) return;
+    batteryMode = enabled;
+    climate.setBatteryMode(enabled);
+    light.setBatteryMode(enabled);
+    if (enabled) particulate.suspend();
+    else particulate.start();
+}
+
+bool SensorManager::prepareBatteryMeasurement()
+{
+    return particulate.start();
+}
+
+void SensorManager::prepareBatteryLight()
+{
+    light.startOneShot();
+}
+
+bool SensorManager::readBattery(SensorData& data, bool allowMissingParticulate)
+{
+    // Cada ciclo começa com PM inválido. Não recicla valores do ciclo anterior.
+    const bool freshParticulate = particulate.update(data);
+    if (!freshParticulate && !allowMissingParticulate) return false;
+    climate.update(data);
+    light.update(data);
+    return true;
+}
+
+void SensorManager::suspendBatteryMeasurement()
+{
+    light.suspend();
+    particulate.suspend();
+}

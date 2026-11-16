@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <functional>
+#include <atomic>
 #include <mutex>
 #include <deque>
 #include <utility>
@@ -13,6 +14,7 @@ public:
     using MessageCallback =
         std::function<void(const std::string&)>;
     void begin();
+    void end();
     void update();
     bool isConnected() const;
     void send(const std::string& message);
@@ -32,6 +34,7 @@ private:
     NimBLECharacteristic* rx = nullptr;
     NimBLECharacteristic* tx = nullptr;
 
+    std::atomic<bool> running{false};
     bool connected = false;
     bool notificationsEnabled = false;
     uint16_t connectionHandle = BLE_HS_CONN_HANDLE_NONE;

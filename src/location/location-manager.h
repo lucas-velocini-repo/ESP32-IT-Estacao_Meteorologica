@@ -25,6 +25,7 @@ public:
     void update(GNSSManager& gnss, TimeManager& clock, SettingsManager& settings,
                 StationHttpClient& http);
     const StationLocation& getData() const { return location; }
+    bool belongsTo(const String& id) const { return deviceId == id; }
 
 private:
     bool persist();

@@ -7,7 +7,10 @@
 class BH1750Sensor
 {
 public:
-    void begin();
+    void begin(bool batteryMode = false);
+    void setBatteryMode(bool enabled);
+    void startOneShot();
+    void suspend();
 
     void update(
         SensorData& data
@@ -18,5 +21,5 @@ private:
 
     bool sensorReady = false;
 
-    float light = 0.0f;
+    float light = NAN;
 };

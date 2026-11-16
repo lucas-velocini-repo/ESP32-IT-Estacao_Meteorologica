@@ -71,6 +71,7 @@ extern NimBLEServer fakeServer;
 extern NimBLEAdvertising fakeAdvertising;
 struct NimBLEDevice {
     static void init(const char*) {}
+    static void deinit(bool) {}
     static void setMTU(unsigned) {}
     static NimBLEServer* createServer() { return &fakeServer; }
     static NimBLEAdvertising* getAdvertising() { return &fakeAdvertising; }

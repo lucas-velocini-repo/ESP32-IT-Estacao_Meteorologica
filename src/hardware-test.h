@@ -4,6 +4,7 @@
 #include "config/config.h"
 #include "sensors/sensor-manager.h"
 #include "sensors/gnss-manager.h"
+#include "led/status-leds.h"
 
 namespace HardwareTest
 {
@@ -24,8 +25,8 @@ namespace HardwareTest
         // 0 = vermelho, 1 = azul, 2 = ambos.
         for (uint8_t i = 0; i < 3; ++i)
         {
-            digitalWrite(RED_PINS[i], state != 1 ? HIGH : LOW);
-            digitalWrite(BLUE_PINS[i], state != 0 ? HIGH : LOW);
+            StatusLeds::write(RED_PINS[i], state != 1, true);
+            StatusLeds::write(BLUE_PINS[i], state != 0, false);
         }
     }
 

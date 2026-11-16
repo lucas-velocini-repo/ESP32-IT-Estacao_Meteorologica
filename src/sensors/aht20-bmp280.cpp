@@ -54,6 +54,7 @@ void AHT20BMP280::update(
     SensorData& data
 )
 {
+    if (batteryMode) temperature = humidity = pressure = NAN;
     // AHT20 -----------------------------
     if(ahtReady)
     {
@@ -87,7 +88,15 @@ void AHT20BMP280::update(
     // BMP280 -----------------------------
     if(bmpReady)
     {
+        if (batteryMode)
+        {
+            bmp.setSampling(Adafruit_BMP280::MODE_FORCED,
+                Adafruit_BMP280::SAMPLING_X1, Adafruit_BMP280::SAMPLING_X1,
+                Adafruit_BMP280::FILTER_OFF);
+            bmp.takeForcedMeasurement();
+        }
         float pressurePa = bmp.readPressure();
+        if (batteryMode) bmp.setSampling(Adafruit_BMP280::MODE_SLEEP);
 
         if(!isnan(pressurePa) && pressurePa > 0.0f)
         {
@@ -106,4 +115,13 @@ void AHT20BMP280::update(
     data.humidity = humidity;
 
     data.pressure = pressure;
+}
+void AHT20BMP280::setBatteryMode(bool enabled)
+{
+    batteryMode = enabled;
+    // AHT20 já dispara a conversão sob demanda em getEvent() e volta ao standby.
+    if (bmpReady)
+        bmp.setSampling(enabled ? Adafruit_BMP280::MODE_SLEEP : Adafruit_BMP280::MODE_NORMAL,
+            Adafruit_BMP280::SAMPLING_X1, Adafruit_BMP280::SAMPLING_X1,
+            Adafruit_BMP280::FILTER_OFF);
 }

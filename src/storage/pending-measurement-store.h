@@ -7,6 +7,8 @@
 class PendingMeasurementStore
 {
 public:
+    PendingMeasurementStore(const char* queue = "/pending.jsonl", const char* temp = "/pending.tmp")
+        : queueFilePath(queue), tempFilePath(temp) {}
     bool begin();
 
     bool enqueue(
@@ -25,6 +27,8 @@ public:
 
 
 private:
+    const char* queueFilePath;
+    const char* tempFilePath;
     bool ready = false;
 
     size_t maxQueueBytes = 0;

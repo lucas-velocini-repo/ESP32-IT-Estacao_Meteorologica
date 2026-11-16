@@ -2,6 +2,7 @@
 
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include "power/power-manager.h"
 
 void StationHttpClient::begin(
     SettingsManager& settingsManager
@@ -34,6 +35,7 @@ bool StationHttpClient::reportConfiguration(const std::string& payload)
 
 bool StationHttpClient::request(const std::string& payload, const char* method, bool location, const char* configPath, std::string* responseBody)
 {
+    if (!PowerManager::externalPower()) return false;
     if(settings == nullptr)
     {
         Serial.println(
@@ -79,11 +81,9 @@ bool StationHttpClient::request(const std::string& payload, const char* method, 
     }
 
     HTTPClient http;
-    if (location || configPath != nullptr)
-    {
-        http.setConnectTimeout(3000);
-        http.setTimeout(3000);
-    }
+    // Limita a requisição já iniciada se a alimentação cair durante o HTTP.
+    http.setConnectTimeout(3000);
+    http.setTimeout(3000);
 
     Serial.println();
     Serial.println("[HTTP] Enviando dados...");

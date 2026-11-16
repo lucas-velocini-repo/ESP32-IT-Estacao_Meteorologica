@@ -12,6 +12,7 @@ public:
         const char* password
     );
     void update();
+    void end();
     String getSSID() const;
     String getIP() const;
 

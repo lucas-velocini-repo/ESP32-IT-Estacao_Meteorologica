@@ -1,5 +1,6 @@
 #include "wifi-manager.h"
 #include <WiFi.h>
+#include "power/power-manager.h"
 
 void WiFiManager::begin(const char* ssid, const char* password)
 {
@@ -14,6 +15,8 @@ void WiFiManager::connect()
     Serial.println();
     Serial.println("Conectando ao WiFi...");
 
+    if (!PowerManager::externalPower()) return;
+    WiFi.setAutoReconnect(true);
     WiFi.mode(WIFI_STA);
     WiFi.begin(
         _ssid.c_str(),
@@ -22,11 +25,11 @@ void WiFiManager::connect()
 
     unsigned long start = millis();
 
-    while (WiFi.status() != WL_CONNECTED &&
+    while (PowerManager::externalPower() && WiFi.status() != WL_CONNECTED &&
         millis() - start < 10000)
     {
-        delay(500);
-        Serial.print(".");
+        delay(20);
+
     }
 
     if (WiFi.status() != WL_CONNECTED)
@@ -71,10 +74,13 @@ bool WiFiManager::configure(
         "[WiFi] Aplicando nova configuração..."
     );
 
+    if (!PowerManager::externalPower()) return false;
     WiFi.disconnect();
 
-    delay(250);
+    delay(20);
 
+    if (!PowerManager::externalPower()) return false;
+    WiFi.setAutoReconnect(true);
     WiFi.mode(WIFI_STA);
 
     WiFi.begin(
@@ -86,6 +92,8 @@ bool WiFiManager::configure(
         "[WiFi] Conectando"
     );
 
+    if (!PowerManager::externalPower()) return false;
+
     const unsigned long timeoutMs =
         30000;
 
@@ -93,12 +101,12 @@ bool WiFiManager::configure(
         millis();
 
     while(
-        WiFi.status() != WL_CONNECTED &&
+        PowerManager::externalPower() && WiFi.status() != WL_CONNECTED &&
         millis() - start < timeoutMs
     )
     {
-        delay(500);
-        Serial.print(".");
+        delay(20);
+
     }
 
     Serial.println();
@@ -194,4 +202,12 @@ void WiFiManager::update()
         reconnectIntervalMs =
             MAX_RECONNECT_INTERVAL_MS;
     }
+}
+void WiFiManager::end()
+{
+    WiFi.setAutoReconnect(false);
+    WiFi.disconnect(true, false); // Não apaga as credenciais persistidas.
+    WiFi.mode(WIFI_OFF);
+    lastReconnectAttempt = 0;
+    reconnectIntervalMs = 5000;
 }

@@ -5,12 +5,6 @@
 
 namespace
 {
-    constexpr char QUEUE_FILE[] =
-        "/pending.jsonl";
-
-    constexpr char TEMP_FILE[] =
-        "/pending.tmp";
-
     constexpr size_t
         MAX_FILESYSTEM_USAGE_PERCENT =
             70;
@@ -43,11 +37,11 @@ bool PendingMeasurementStore::begin()
     * Garante que o arquivo principal da fila
     * exista desde a inicialização.
     */
-    if(!LittleFS.exists(QUEUE_FILE))
+    if(!LittleFS.exists(queueFilePath))
     {
         File queueFile =
             LittleFS.open(
-                QUEUE_FILE,
+                queueFilePath,
                 FILE_WRITE
             );
 
@@ -128,7 +122,7 @@ recoverTemporaryFile()
 {
     File tempFile =
         LittleFS.open(
-            TEMP_FILE,
+            tempFilePath,
             FILE_READ
         );
 
@@ -149,12 +143,12 @@ recoverTemporaryFile()
      */
     if(
         LittleFS.exists(
-            QUEUE_FILE
+            queueFilePath
         )
     )
     {
         LittleFS.remove(
-            TEMP_FILE
+            tempFilePath
         );
 
         return;
@@ -169,8 +163,8 @@ recoverTemporaryFile()
      */
     if(
         LittleFS.rename(
-            TEMP_FILE,
-            QUEUE_FILE
+            tempFilePath,
+            queueFilePath
         )
     )
     {
@@ -201,8 +195,8 @@ bool PendingMeasurementStore::enqueue(
     }
 
 
-    const size_t requiredBytes =
-        payload.size() + 1;
+    const size_t requiredBytes = payload.size() + 2; // println grava CRLF.
+    if (requiredBytes > maxQueueBytes) return false;
 
 
     /*
@@ -213,13 +207,13 @@ bool PendingMeasurementStore::enqueue(
      */
     while(
         LittleFS.exists(
-            QUEUE_FILE
+            queueFilePath
         )
     )
     {
         File currentFile =
             LittleFS.open(
-                QUEUE_FILE,
+                queueFilePath,
                 FILE_READ
             );
 
@@ -241,6 +235,7 @@ bool PendingMeasurementStore::enqueue(
             currentSize
             + requiredBytes
             <= maxQueueBytes
+            && LittleFS.usedBytes() + requiredBytes <= maxQueueBytes
         )
         {
             break;
@@ -261,7 +256,7 @@ bool PendingMeasurementStore::enqueue(
 
     File file =
         LittleFS.open(
-            QUEUE_FILE,
+            queueFilePath,
             FILE_APPEND
         );
 
@@ -286,7 +281,7 @@ bool PendingMeasurementStore::enqueue(
     file.close();
 
 
-    if(written == 0)
+    if(written != requiredBytes)
     {
         Serial.println(
             "[Queue] Falha ao gravar medição."
@@ -319,7 +314,7 @@ bool PendingMeasurementStore::peek(
     if(
         !ready
         || !LittleFS.exists(
-            QUEUE_FILE
+            queueFilePath
         )
     )
     {
@@ -329,7 +324,7 @@ bool PendingMeasurementStore::peek(
 
     File file =
         LittleFS.open(
-            QUEUE_FILE,
+            queueFilePath,
             FILE_READ
         );
 
@@ -385,7 +380,7 @@ bool PendingMeasurementStore::removeFirst()
     if(
         !ready
         || !LittleFS.exists(
-            QUEUE_FILE
+            queueFilePath
         )
     )
     {
@@ -395,7 +390,7 @@ bool PendingMeasurementStore::removeFirst()
 
     File source =
         LittleFS.open(
-            QUEUE_FILE,
+            queueFilePath,
             FILE_READ
         );
 
@@ -408,7 +403,7 @@ bool PendingMeasurementStore::removeFirst()
 
     File destination =
         LittleFS.open(
-            TEMP_FILE,
+            tempFilePath,
             FILE_WRITE
         );
 
@@ -458,9 +453,15 @@ bool PendingMeasurementStore::removeFirst()
         }
 
 
-        destination.println(
-            line
-        );
+        const size_t copied = destination.println(line);
+        if (copied != line.length() + 2)
+        {
+            source.close();
+            destination.close();
+            LittleFS.remove(tempFilePath);
+            Serial.println("[Queue] Copia incompleta; fila original preservada.");
+            return false;
+        }
 
         hasRemaining =
             true;
@@ -476,7 +477,7 @@ bool PendingMeasurementStore::removeFirst()
     if(!removedFirst)
     {
         LittleFS.remove(
-            TEMP_FILE
+            tempFilePath
         );
 
         return false;
@@ -485,12 +486,12 @@ bool PendingMeasurementStore::removeFirst()
 
     if(
         !LittleFS.remove(
-            QUEUE_FILE
+            queueFilePath
         )
     )
     {
         LittleFS.remove(
-            TEMP_FILE
+            tempFilePath
         );
 
         return false;
@@ -501,8 +502,8 @@ bool PendingMeasurementStore::removeFirst()
     {
         if(
             !LittleFS.rename(
-                TEMP_FILE,
-                QUEUE_FILE
+                tempFilePath,
+                queueFilePath
             )
         )
         {
@@ -521,12 +522,12 @@ bool PendingMeasurementStore::removeFirst()
         * existente, mas vazio.
         */
         LittleFS.remove(
-            TEMP_FILE
+            tempFilePath
         );
 
         File emptyQueue =
             LittleFS.open(
-                QUEUE_FILE,
+                queueFilePath,
                 FILE_WRITE
             );
 
@@ -551,7 +552,7 @@ size_t PendingMeasurementStore::count()
     if(
         !ready
         || !LittleFS.exists(
-            QUEUE_FILE
+            queueFilePath
         )
     )
     {
@@ -561,7 +562,7 @@ size_t PendingMeasurementStore::count()
 
     File file =
         LittleFS.open(
-            QUEUE_FILE,
+            queueFilePath,
             FILE_READ
         );
 
